@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Casa Velha - Terminal de Check-in & AIMA</title>
+  <title>Casa Velha, Terminal de Check-in & AIMA</title>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -170,6 +170,16 @@
         return str.slice(0, 10);
       };
 
+      const extrairValor = (obj, ...chaves) => {
+        if (!obj) return '';
+        for (let k of chaves) {
+          if (obj[k] !== undefined && obj[k] !== null && String(obj[k]).trim() !== '') {
+            return String(obj[k]).trim();
+          }
+        }
+        return '';
+      };
+
       useEffect(() => {
         fetch(GOOGLE_SCRIPT_URL, {
           method: 'POST',
@@ -207,22 +217,25 @@
               const ultimoRegisto = result.data[result.data.length - 1];
               const totalEstadias = result.data.length;
 
+              const nomeHist = extrairValor(ultimoRegisto, 'nome', 'Nome', 'Nome_Completo');
+              const dEntradaHist = extrairValor(ultimoRegisto, 'dataEntrada', 'dataCheckin', 'Data_Entrada');
+
               setAlertaRecorrente({
-                nome: ultimoRegisto.nome || ultimoRegisto.Nome || '',
+                nome: nomeHist,
                 estadias: totalEstadias,
-                ultimaEntrada: ultimoRegisto.dataEntrada || ultimoRegisto.dataCheckin || ultimoRegisto.Data_Entrada || ''
+                ultimaEntrada: dEntradaHist
               });
 
               setNovoBoletim(prev => ({
                 ...prev,
-                nome: ultimoRegisto.nome || ultimoRegisto.Nome || prev.nome,
-                nacionalidade: ultimoRegisto.nacionalidade || ultimoRegisto.Nacionalidade || prev.nacionalidade,
-                docTipo: ultimoRegisto.docTipo || ultimoRegisto.Tipo_Documento || prev.docTipo,
-                docPais: ultimoRegisto.docPais || ultimoRegisto.Pais_Emissor || prev.docPais,
-                paisResidencia: ultimoRegisto.paisResidencia || ultimoRegisto.Pais_Residencia || prev.paisResidencia
+                nome: nomeHist || prev.nome,
+                nacionalidade: extrairValor(ultimoRegisto, 'nacionalidade', 'Nacionalidade') || prev.nacionalidade,
+                docTipo: extrairValor(ultimoRegisto, 'docTipo', 'Tipo_Documento') || prev.docTipo,
+                docPais: extrairValor(ultimoRegisto, 'docPais', 'Pais_Emissor') || prev.docPais,
+                paisResidencia: extrairValor(ultimoRegisto, 'paisResidencia', 'Pais_Residencia') || prev.paisResidencia
               }));
 
-              const rawNasce = ultimoRegisto.dataNascimento || ultimoRegisto.Data_Nascimento || '';
+              const rawNasce = extrairValor(ultimoRegisto, 'dataNascimento', 'Data_Nascimento');
               if (rawNasce) {
                 const dClean = formatarDataLimpa(rawNasce);
                 const parts = dClean.split('-');
@@ -379,24 +392,37 @@
           const result = await response.json();
 
           if (result.status === "success") {
-            const mappedData = (result.data || []).map(r => ({
-              ...r,
-              dEntradaFormatada: formatarDataLimpa(r.dataEntrada || r.dataCheckin || r.Data_Entrada),
-              dSaidaFormatada: formatarDataLimpa(r.dataSaida || r.dataCheckout || r.Data_Saida_Prevista),
-              dNascimentoFormatada: formatarDataLimpa(r.dataNascimento || r.Data_Nascimento),
-              nomeGuelst: r.nome || r.Nome || '',
-              docNumeroClean: r.docNumero || r.Numero_Documento || '',
-              docTipoClean: r.docTipo || r.Tipo_Documento || 'Cartão de Cidadão / BI',
-              docPaisClean: r.docPais || r.Pais_Emissor || 'Portugal',
-              nacionalidadeClean: r.nacionalidade || r.Nacionalidade || 'Portugal',
-              paisResidenciaClean: r.paisResidencia || r.Pais_Residencia || 'Portugal',
-              alojamentoClean: r.tipoAlojamento || r.Tipo_Alojamento || 'Quarto Duplo com Vista Mar',
-              unidadeClean: r.numeroUnidade || r.Numero_Unidade || '1',
-              valorReservaClean: r.valorReserva || r.Valor_Reserva || '0.00',
-              taxaTuristicaClean: r.taxaTuristica || r.Taxa_Turistica || '0.00',
-              modoPagamentoClean: r.modoPagamento || r.Modo_Pagamento || 'Numerário',
-              funcionarioRececaoClean: r.funcionarioRececao || r.Funcionario_Rececao || ''
-            }));
+            const mappedData = (result.data || []).map(r => {
+              const dEnt = formatarDataLimpa(extrairValor(r, 'dataEntrada', 'dataCheckin', 'Data_Entrada'));
+              const dSai = formatarDataLimpa(extrairValor(r, 'dataSaida', 'dataCheckout', 'Data_Saida_Prevista'));
+              const dNasc = formatarDataLimpa(extrairValor(r, 'dataNascimento', 'Data_Nascimento'));
+
+              return {
+                raw: r,
+                rowIndex: r.rowIndex,
+                idBoletim: extrairValor(r, 'idBoletim', 'ID_Boletim', 'id') || 'CV-HIST',
+                nome: extrairValor(r, 'nome', 'Nome', 'Nome_Completo'),
+                dataNascimento: dNasc,
+                docTipo: extrairValor(r, 'docTipo', 'Tipo_Documento') || 'Cartão de Cidadão / BI',
+                docNumero: extrairValor(r, 'docNumero', 'Numero_Documento'),
+                docPais: extrairValor(r, 'docPais', 'Pais_Emissor') || 'Portugal',
+                nacionalidade: extrairValor(r, 'nacionalidade', 'Nacionalidade') || 'Portugal',
+                paisResidencia: extrairValor(r, 'paisResidencia', 'Pais_Residencia') || 'Portugal',
+                tipoAlojamento: extrairValor(r, 'tipoAlojamento', 'Tipo_Alojamento') || 'Quarto Duplo com Vista Mar',
+                numeroUnidade: extrairValor(r, 'numeroUnidade', 'Numero_Unidade') || '1',
+                dataEntrada: dEnt,
+                dataSaida: dSai,
+                eMenor: extrairValor(r, 'eMenor', 'Menor') || 'Não',
+                titularDoc: extrairValor(r, 'titularDoc', 'Titular_Documento') || 'Próprio',
+                qualidadeAcompanhante: extrairValor(r, 'qualidadeAcompanhante', 'Qualidade_Acompanhante') || 'N/A',
+                valorReserva: extrairValor(r, 'valorReserva', 'Valor_Reserva') || '0.00',
+                taxaTuristica: extrairValor(r, 'taxaTuristica', 'Taxa_Turistica') || '0.00',
+                modoPagamento: extrairValor(r, 'modoPagamento', 'Modo_Pagamento') || 'Numerário',
+                funcionarioRececao: extrairValor(r, 'funcionarioRececao', 'Funcionario_Rececao') || selectedFuncObj.nome,
+                funcionarioId: extrairValor(r, 'funcionarioId', 'Funcionario_ID') || ''
+              };
+            });
+
             setSearchResults(mappedData);
             if (mappedData.length === 0) {
               alert('Nenhum registo encontrado com o termo pesquisado.');
@@ -410,7 +436,7 @@
       };
 
       const handleUpdateCheckout = async () => {
-        if (!novaDataSaida || novaDataSaida <= editingRegisto.dEntradaFormatada) {
+        if (!novaDataSaida || novaDataSaida <= editingRegisto.dataEntrada) {
           alert('A nova data de saída deve ser posterior à data de check-in.');
           return;
         }
@@ -445,39 +471,37 @@
       };
 
       const handlePrintFromSearch = (r) => {
-        const dEntrada = r.dEntradaFormatada || formatarDataLimpa(r.dataEntrada);
-        const dSaida = r.dSaidaFormatada || formatarDataLimpa(r.dataSaida);
-        const noites = calcularDiferencaNoites(dEntrada, dSaida);
+        const noites = calcularDiferencaNoites(r.dataEntrada, r.dataSaida);
 
-        const funcString = r.funcionarioRececaoClean || r.funcionarioRececao || selectedFuncObj.nome;
-        let funcIdExtracted = selectedFuncObj.id || '';
-        if (funcString.includes('[') && funcString.includes(']')) {
-          funcIdExtracted = funcString.split('[')[1].split(']')[0];
+        let funcId = r.funcionarioId;
+        if (!funcId && r.funcionarioRececao && r.funcionarioRececao.includes('[') && r.funcionarioRececao.includes(']')) {
+          funcId = r.funcionarioRececao.split('[')[1].split(']')[0];
         }
 
         const payloadFromSearch = {
-          idBoletim: r.idBoletim || 'CV-HIST',
-          nome: r.nomeGuelst || r.nome,
-          dataNascimento: r.dNascimentoFormatada || formatarDataLimpa(r.dataNascimento),
-          nacionalidade: r.nacionalidadeClean || 'Portugal',
-          paisResidencia: r.paisResidenciaClean || 'Portugal',
-          docTipo: r.docTipoClean || 'Cartão de Cidadão / BI',
-          docNumero: r.docNumeroClean || '',
-          docPais: r.docPaisClean || 'Portugal',
-          tipoAlojamento: r.alojamentoClean,
-          numeroUnidade: r.unidadeClean,
-          dataEntrada: dEntrada,
-          dataSaida: dSaida,
+          idBoletim: r.idBoletim,
+          nome: r.nome,
+          dataNascimento: r.dataNascimento,
+          nacionalidade: r.nacionalidade,
+          paisResidencia: r.paisResidencia,
+          docTipo: r.docTipo,
+          docNumero: r.docNumero,
+          docPais: r.docPais,
+          tipoAlojamento: r.tipoAlojamento,
+          numeroUnidade: r.numeroUnidade,
+          dataEntrada: r.dataEntrada,
+          dataSaida: r.dataSaida,
           noitesCalculadas: noites,
-          eMenor: r.eMenor || 'Não',
-          titularDoc: r.titularDoc || 'Próprio',
-          qualidadeAcompanhante: r.qualidadeAcompanhante || 'N/A',
-          valorReserva: r.valorReservaClean,
-          taxaTuristica: r.taxaTuristicaClean,
-          modoPagamento: r.modoPagamentoClean,
-          funcionarioNome: funcString,
-          funcionarioId: funcIdExtracted
+          eMenor: r.eMenor,
+          titularDoc: r.titularDoc,
+          qualidadeAcompanhante: r.qualidadeAcompanhante,
+          valorReserva: r.valorReserva,
+          taxaTuristica: r.taxaTuristica,
+          modoPagamento: r.modoPagamento,
+          funcionarioNome: r.funcionarioRececao,
+          funcionarioId: funcId
         };
+
         setUltimoSucesso(payloadFromSearch);
       };
 
@@ -650,9 +674,9 @@
                   {searchResults.map(r => (
                     <div key={r.rowIndex || r.idBoletim} className="p-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                       <div>
-                        <div className="font-bold text-slate-900">{r.nomeGuelst} <span className="text-blue-600 font-mono">({r.idBoletim})</span></div>
-                        <div className="text-slate-500">{r.docTipoClean}: {r.docNumeroClean} | {r.alojamentoClean} (Unidade {r.unidadeClean})</div>
-                        <div className="text-slate-700 font-medium">Entrada: {r.dEntradaFormatada} → Saída Atual: <span className="text-amber-700 font-bold">{r.dSaidaFormatada}</span></div>
+                        <div className="font-bold text-slate-900">{r.nome} <span className="text-blue-600 font-mono">({r.idBoletim})</span></div>
+                        <div className="text-slate-500">{r.docTipo}: {r.docNumero} | {r.tipoAlojamento} (Unidade {r.numeroUnidade})</div>
+                        <div className="text-slate-700 font-medium">Entrada: {r.dataEntrada} → Saída Atual: <span className="text-amber-700 font-bold">{r.dataSaida}</span></div>
                       </div>
                       <div className="flex gap-2 self-end sm:self-auto">
                         <button 
@@ -662,7 +686,7 @@
                           🖨️ 2ª Via
                         </button>
                         <button 
-                          onClick={() => { setEditingRegisto(r); setNovaDataSaida(r.dSaidaFormatada); }} 
+                          onClick={() => { setEditingRegisto(r); setNovaDataSaida(r.dataSaida); }} 
                           className="bg-amber-600 hover:bg-amber-700 text-white font-semibold px-3 py-1.5 rounded"
                         >
                           Alterar Check-out
@@ -675,7 +699,7 @@
 
               {editingRegisto && (
                 <div className="mt-3 p-4 bg-amber-100 rounded border border-amber-300 text-xs space-y-2">
-                  <div className="font-bold text-amber-900">Alterar Saída Prevista para: {editingRegisto.nomeGuelst}</div>
+                  <div className="font-bold text-amber-900">Alterar Saída Prevista para: {editingRegisto.nome}</div>
                   <div className="flex items-center gap-3">
                     <div>
                       <label className="block font-semibold text-amber-900 mb-1">Nova Data de Check-out Prevista:</label>
@@ -1228,7 +1252,7 @@
             </div>
           )}
 
-          {/* MODAL DE SUCESSO & IMPRESSÃO */}
+          {/* MODAL DE SUCESSO & IMPRESSÃO - FORMATO IDÊNTICO PARA ORIGINAL E 2ª VIA */}
           {ultimoSucesso && (
             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
               <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-slate-200">
