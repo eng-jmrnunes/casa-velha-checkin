@@ -22,7 +22,7 @@
   <script type="text/babel">
     const { useState, useEffect } = React;
 
-    // ⚠️ COLE AQUI O SEU LINK DO GOOGLE APPS SCRIPT
+    // URL DO GOUGE APPS SCRIPT JÁ CONFIGURADO
     const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzZitsCHoHUdgDwb2g8OrJEUm6tkXob-XhiywGuRt2ZAIPH9pwTWVvXGc2hQzA4psfbTg/exec";
 
     const TIPOS_ALOJAMENTO = [
@@ -36,6 +36,13 @@
       "Numerário",
       "Booking",
       "MB",
+      "Outro"
+    ];
+
+    const PLATAFORMAS_RESERVA = [
+      "Booking",
+      "AirBnb",
+      "Site Próprio",
       "Outro"
     ];
 
@@ -90,9 +97,8 @@
       const [showSobreModal, setShowSobreModal] = useState(false);
       const [showBoletimForm, setShowBoletimForm] = useState(true);
 
-      // Proteção de Exportação CSV (Gestor)
-      const [csvPasswordInput, setCsvPasswordInput] = useState('');
-      const [csvUnlocked, setCsvUnlocked] = useState(false);
+      // Módulo CSV (Desbloqueado por defeito conforme pedido)
+      const [csvUnlocked, setCsvUnlocked] = useState(true);
 
       // Deteção de Hóspede Recorrente
       const [alertaRecorrente, setAlertaRecorrente] = useState(null);
@@ -126,7 +132,9 @@
         qualidadeAcompanhante: 'N/A',
         valorReserva: '',
         taxaTuristica: '0.00',
-        modoPagamento: 'Numerário'
+        modoPagamento: 'Numerário',
+        numeroReserva: 'sem reserva',
+        plataformaReserva: 'Booking'
       });
 
       const [exportDataInicio, setExportDataInicio] = useState(todayStr);
@@ -170,7 +178,6 @@
         return str.slice(0, 10);
       };
 
-      // Limpa valores de moeda como "1 400,00 €", "900,00 €" ou "14.00"
       const formatarMoedaAvançada = (val) => {
         if (val === undefined || val === null || val === '') return '0.00';
         let str = String(val).replace('€', '').replace(/\s+/g, '').trim();
@@ -179,104 +186,62 @@
         return isNaN(num) ? '0.00' : num.toFixed(2);
       };
 
-      // Extrator universal tolerante a ausência de colunas e nomes variados
-      const lerCampoTabela = (r, nomesPossiveis) => {
-        if (!r) return '';
-        
-        // Se a linha vier como Array
+      const processarLinhaPorIndice = (r) => {
+        let arr = [];
+        let rIndex = 0;
+
         if (Array.isArray(r)) {
-          return '';
+          arr = r;
+          rIndex = r.rowIndex || 0;
+        } else if (typeof r === 'object' && r !== null) {
+          rIndex = r.rowIndex || 0;
+          arr = [
+            r.ID_Boletim || r[0] || '',
+            r.Data_Registo || r[1] || '',
+            r.Nome || r[2] || '',
+            r.Data_Nascimento || r[3] || '',
+            r.Nacionalidade || r[4] || '',
+            r.Tipo_Documento || r[5] || '',
+            r.Numero_Documento || r[6] || '',
+            r.Pais_Emissor || r[7] || '',
+            r.Pais_Residencia || r[8] || '',
+            r.Check_In || r[9] || '',
+            r.Check_Out || r[10] || '',
+            r.Tipo_Alojamento || r[11] || '',
+            r.Numero_Unidade || r[12] || '',
+            r.E_Menor || r[13] || '',
+            r.Titular_Documento || r[14] || '',
+            r.Qualidade_Acompanhante || r[15] || '',
+            r.Valor_Reserva || r[16] || '',
+            r.Taxa_Turistica || r[17] || '',
+            r.Modo_Pagamento || r[18] || '',
+            r.Funcionario_Rececao || r[19] || '',
+            r.Numero_Reserva || r[20] || 'sem reserva',
+            r.Plataforma_Reserva || r[21] || 'Booking'
+          ];
         }
 
-        const keys = Object.keys(r);
-        for (let nome of nomesPossiveis) {
-          const nomeClean = nome.toLowerCase().replace(/[^a-z0-9]/g, '');
-          const matchKey = keys.find(k => k.toLowerCase().replace(/[^a-z0-9]/g, '') === nomeClean);
-          
-          if (matchKey && r[matchKey] !== undefined && r[matchKey] !== null && String(r[matchKey]).trim() !== '') {
-            return String(r[matchKey]).trim();
-          }
-        }
-        return '';
-      };
-
-      const processarLinhaRecebida = (r) => {
-        // Se o Google Apps Script enviar o registo como uma lista simples de valores [val1, val2, ...]
-        if (Array.isArray(r)) {
-          const idBoletim = r[0] || 'CV-HIST';
-          const nome = r[2] || '';
-          const dataNascimento = formatarDataLimpa(r[3] || '');
-          const nacionalidade = r[4] || 'Portugal';
-          const docTipo = r[5] || 'Cartão de Cidadão / BI';
-          const docNumero = r[6] || '';
-          const docPais = r[7] || 'Portugal';
-          const paisResidencia = r[8] || 'Portugal';
-          const dataEntrada = formatarDataLimpa(r[9] || '');
-          const dataSaida = formatarDataLimpa(r[10] || '');
-          const tipoAlojamento = r[11] || 'Quarto Duplo com Vista Mar';
-          const numeroUnidade = r[12] || '1';
-          const eMenor = r[13] || 'Não';
-          const titularDoc = r[14] || 'Próprio';
-          const qualidadeAcompanhante = r[15] || 'N/A';
-          const valorReserva = formatarMoedaAvançada(r[16]);
-          const taxaTuristica = formatarMoedaAvançada(r[17]);
-          const modoPagamento = r[18] || 'Numerário';
-          const funcRececao = r[19] || selectedFuncObj.nome;
-
-          let funcId = '';
-          if (funcRececao && funcRececao.includes('[') && funcRececao.includes(']')) {
-            funcId = funcRececao.split('[')[1].split(']')[0];
-          }
-
-          return {
-            rowIndex: r.rowIndex || 0,
-            idBoletim,
-            nome,
-            dataNascimento,
-            nacionalidade,
-            paisResidencia,
-            docTipo,
-            docNumero,
-            docPais,
-            tipoAlojamento,
-            numeroUnidade,
-            dataEntrada,
-            dataSaida,
-            noitesCalculadas: calcularDiferencaNoites(dataEntrada, dataSaida),
-            eMenor,
-            titularDoc,
-            qualidadeAcompanhante,
-            valorReserva,
-            taxaTuristica,
-            modoPagamento,
-            funcionarioNome: funcRececao,
-            funcionarioId: funcId || selectedFuncObj.id || ''
-          };
-        }
-
-        // Se vier como Objeto com nomes de colunas
-        const idBoletim = lerCampoTabela(r, ['ID_Boletim', 'idBoletim', 'id']) || 'CV-HIST';
-        const nome = lerCampoTabela(r, ['Nome', 'nome', 'hospede']);
-        const dataNascimento = formatarDataLimpa(lerCampoTabela(r, ['Data_Nascimento', 'dataNascimento', 'nascimento']));
-        const nacionalidade = lerCampoTabela(r, ['Nacionalidade', 'nacionalidade']) || 'Portugal';
-        const docTipo = lerCampoTabela(r, ['Tipo_Documento', 'docTipo', 'tipodocumento']) || 'Cartão de Cidadão / BI';
-        const docNumero = lerCampoTabela(r, ['Numero_Documento', 'docNumero', 'numerodocumento']);
-        const docPais = lerCampoTabela(r, ['Pais_Emissor', 'docPais', 'paisemissor']) || 'Portugal';
-        const paisResidencia = lerCampoTabela(r, ['Pais_Residencia', 'paisResidencia', 'paisresidencia']) || 'Portugal';
-        
-        const dataEntrada = formatarDataLimpa(lerCampoTabela(r, ['Check_In', 'dataEntrada', 'dataCheckin', 'checkin']));
-        const dataSaida = formatarDataLimpa(lerCampoTabela(r, ['Check_Out', 'dataSaida', 'dataCheckout', 'checkout']));
-        
-        const tipoAlojamento = lerCampoTabela(r, ['Tipo_Alojamento', 'tipoAlojamento', 'alojamento']) || 'Quarto Duplo com Vista Mar';
-        const numeroUnidade = lerCampoTabela(r, ['Numero_Unidade', 'numeroUnidade', 'unidade']) || '1';
-        const eMenor = lerCampoTabela(r, ['E_Menor', 'eMenor', 'menor']) || 'Não';
-        const titularDoc = lerCampoTabela(r, ['Titular_Documento', 'titularDoc', 'titular']) || 'Próprio';
-        const qualidadeAcompanhante = lerCampoTabela(r, ['Qualidade_Acompanhante', 'qualidadeAcompanhante', 'acompanhante']) || 'N/A';
-        
-        const valorReserva = formatarMoedaAvançada(lerCampoTabela(r, ['Valor_Reserva', 'valorReserva', 'reserva']));
-        const taxaTuristica = formatarMoedaAvançada(lerCampoTabela(r, ['Taxa_Turistica', 'taxaTuristica', 'taxa']));
-        const modoPagamento = lerCampoTabela(r, ['Modo_Pagamento', 'modoPagamento', 'pagamento']) || 'Numerário';
-        const funcRececao = lerCampoTabela(r, ['Funcionario_Rececao', 'funcionarioRececao', 'funcionario']) || selectedFuncObj.nome;
+        const idBoletim = String(arr[0] || 'CV-HIST').trim();
+        const nome = String(arr[2] || '').trim();
+        const dataNascimento = formatarDataLimpa(arr[3]);
+        const nacionalidade = String(arr[4] || 'Portugal').trim();
+        const docTipo = String(arr[5] || 'Cartão de Cidadão / BI').trim();
+        const docNumero = String(arr[6] || '').trim();
+        const docPais = String(arr[7] || 'Portugal').trim();
+        const paisResidencia = String(arr[8] || 'Portugal').trim();
+        const dataEntrada = formatarDataLimpa(arr[9]);
+        const dataSaida = formatarDataLimpa(arr[10]);
+        const tipoAlojamento = String(arr[11] || 'Quarto Duplo com Vista Mar').trim();
+        const numeroUnidade = String(arr[12] || '1').trim();
+        const eMenor = String(arr[13] || 'Não').trim();
+        const titularDoc = String(arr[14] || 'Próprio').trim();
+        const qualidadeAcompanhante = String(arr[15] || 'N/A').trim();
+        const valorReserva = formatarMoedaAvançada(arr[16]);
+        const taxaTuristica = formatarMoedaAvançada(arr[17]);
+        const modoPagamento = String(arr[18] || 'Numerário').trim();
+        const funcRececao = String(arr[19] || selectedFuncObj.nome).trim();
+        const numeroReserva = String(arr[20] || 'sem reserva').trim();
+        const plataformaReserva = String(arr[21] || 'Booking').trim();
 
         let funcId = '';
         if (funcRececao && funcRececao.includes('[') && funcRececao.includes(']')) {
@@ -284,7 +249,7 @@
         }
 
         return {
-          rowIndex: r.rowIndex,
+          rowIndex: rIndex,
           idBoletim,
           nome,
           dataNascimento,
@@ -305,7 +270,9 @@
           taxaTuristica,
           modoPagamento,
           funcionarioNome: funcRececao,
-          funcionarioId: funcId || selectedFuncObj.id || ''
+          funcionarioId: funcId || selectedFuncObj.id || '',
+          numeroReserva,
+          plataformaReserva
         };
       };
 
@@ -344,7 +311,7 @@
 
             if (result.status === "success" && result.data && result.data.length > 0) {
               const ultimoRaw = result.data[result.data.length - 1];
-              const norm = processarLinhaRecebida(ultimoRaw);
+              const norm = processarLinhaPorIndice(ultimoRaw);
               const totalEstadias = result.data.length;
 
               setAlertaRecorrente({
@@ -493,7 +460,9 @@
             qualidadeAcompanhante: 'N/A',
             valorReserva: '',
             taxaTuristica: '0.00',
-            modoPagamento: 'Numerário'
+            modoPagamento: 'Numerário',
+            numeroReserva: 'sem reserva',
+            plataformaReserva: 'Booking'
           });
           setNasceAno('');
           setIdadeCalculada(null);
@@ -517,7 +486,7 @@
           const result = await response.json();
 
           if (result.status === "success") {
-            const listMapeada = (result.data || []).map(r => processarLinhaRecebida(r));
+            const listMapeada = (result.data || []).map(r => processarLinhaPorIndice(r));
             setSearchResults(listMapeada);
 
             if (listMapeada.length === 0) {
@@ -591,16 +560,16 @@
             const list = result.data;
 
             if (!list || list.length === 0) {
-              alert(`Nenhum registo de hóspede estrangeiro encontrado entre ${exportDataInicio} e ${exportDataFim}.`);
+              alert(`Nenhum registo elegível encontrado entre ${exportDataInicio} e ${exportDataFim}.`);
               setExporting(false);
               return;
             }
 
             let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
-            csvContent += "Nome_Completo,Data_Nascimento,Nacionalidade,Tipo_Documento,Numero_Documento,Pais_Emissor,Pais_Residencia,Data_Entrada,Data_Saida_Prevista\n";
+            csvContent += "Nome_Completo,Data_Nascimento,Nacionalidade,Tipo_Documento,Numero_Documento,Pais_Emissor,Pais_Residencia,Data_Entrada,Data_Saida_Prevista,Numero_Reserva,Plataforma_Reserva\n";
 
             list.forEach(h => {
-              const row = `"${h.nome}","${h.dataNascimento}","${h.nacionalidade}","${h.docTipo}","${h.docNumero}","${h.docPais}","${h.paisResidencia}","${h.dataEntrada}","${h.dataSaida}"`;
+              const row = `"${h.nome}","${h.dataNascimento}","${h.nacionalidade}","${h.docTipo}","${h.docNumero}","${h.docPais}","${h.paisResidencia}","${h.dataEntrada}","${h.dataSaida}","${h.numeroReserva}","${h.plataformaReserva}"`;
               csvContent += row + "\n";
             });
 
@@ -616,7 +585,7 @@
             link.click();
             document.body.removeChild(link);
 
-            alert(`✅ Ficheiro .CSV gerado com sucesso! (${list.length} hóspede(s) estrangeiro(s) exportado(s)).`);
+            alert(`✅ Ficheiro .CSV gerado com sucesso! (${list.length} registo(s) exportado(s)).`);
           } else {
             alert('Erro ao obter dados: ' + result.message);
           }
@@ -740,7 +709,7 @@
                     <div key={r.rowIndex || r.idBoletim} className="p-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                       <div>
                         <div className="font-bold text-slate-900">{r.nome} <span className="text-blue-600 font-mono">({r.idBoletim})</span></div>
-                        <div className="text-slate-500">{r.docTipo}: {r.docNumero} | {r.tipoAlojamento} (Unidade {r.numeroUnidade})</div>
+                        <div className="text-slate-500">{r.docTipo}: {r.docNumero} | {r.tipoAlojamento} (Unidade {r.numeroUnidade}) | Reserva: <strong>{r.numeroReserva}</strong> ({r.plataformaReserva})</div>
                         <div className="text-slate-700 font-medium">Entrada: {r.dataEntrada} → Saída Atual: <span className="text-amber-700 font-bold">{r.dataSaida}</span></div>
                       </div>
                       <div className="flex gap-2 self-end sm:self-auto">
@@ -999,6 +968,34 @@
                       </div>
                     </div>
 
+                    {/* DADOS DA RESERVA (NOVO) */}
+                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
+                      <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">3. Dados da Reserva</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">N.º de Reserva *</label>
+                          <input 
+                            type="text" 
+                            placeholder="Ex: BK-123456 ou sem reserva" 
+                            value={novoBoletim.numeroReserva} 
+                            onChange={e => setNovoBoletim({...novoBoletim, numeroReserva: e.target.value})} 
+                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none font-medium" 
+                            required 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Plataforma / Modo *</label>
+                          <select 
+                            value={novoBoletim.plataformaReserva} 
+                            onChange={e => setNovoBoletim({...novoBoletim, plataformaReserva: e.target.value})} 
+                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
+                          >
+                            {PLATAFORMAS_RESERVA.map(p => <option key={p} value={p}>{p}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
                     {/* PAINEL DE MENOR DE IDADE */}
                     {novoBoletim.eMenor === 'Sim' && (
                       <div className="bg-purple-50 p-4 rounded-lg border border-purple-200 space-y-3">
@@ -1040,9 +1037,9 @@
                       </div>
                     )}
 
-                    {/* 3. Estadia & Valores Financeiros */}
+                    {/* 4. Estadia & Valores Financeiros */}
                     <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
-                      <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">3. Período da Estadia, Pagamentos</h3>
+                      <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">4. Período da Estadia, Pagamentos</h3>
                       
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
                         <div>
@@ -1199,74 +1196,47 @@
               )}
             </div>
 
-            {/* PAINEL 3: EXPORTAÇÃO .CSV (BLOQUEADO E MOVIDO PARA O FINAL DA PÁGINA) */}
+            {/* PAINEL 3: EXPORTAÇÃO .CSV (DESBLOQUEADO E ATUALIZADO) */}
             <div className="bg-amber-50 p-5 rounded-xl border border-amber-300 shadow-sm space-y-3">
               <div className="flex justify-between items-center">
                 <div>
-                  <h2 className="text-sm font-bold text-amber-900">🔒 Gerador de Ficheiro .CSV para a AIMA (Acesso Restrito)</h2>
-                  <p className="text-xs text-amber-700">Esta área está bloqueada. Introduza a palavra-passe de gestor para desbloquear a exportação.</p>
+                  <h2 className="text-sm font-bold text-amber-900">📄 Gerador de Ficheiro .CSV para a AIMA</h2>
+                  <p className="text-xs text-amber-700">Inclui estrangeiros com reserva Booking/AirBnb ou pagamento MB/Booking.</p>
                 </div>
-                {csvUnlocked && (
-                  <span className="text-[11px] font-bold bg-emerald-200 text-emerald-900 px-2 py-1 rounded">
-                    🔓 Desbloqueado
-                  </span>
-                )}
+                <span className="text-[11px] font-bold bg-emerald-200 text-emerald-900 px-2 py-1 rounded">
+                  🔓 Desbloqueado
+                </span>
               </div>
 
-              {!csvUnlocked ? (
-                <div className="flex gap-2 items-center text-xs pt-1">
+              <form onSubmit={handleExportCSV} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end text-xs pt-2">
+                <div>
+                  <label className="block font-semibold text-amber-900 mb-1">Data Início Check-in</label>
                   <input 
-                    type="password" 
-                    placeholder="Palavra-passe de Gestor..." 
-                    value={csvPasswordInput} 
-                    onChange={e => setCsvPasswordInput(e.target.value)} 
-                    className="border border-amber-300 p-2.5 rounded bg-white font-medium outline-none w-64 focus:ring-2 focus:ring-amber-500" 
+                    type="date" 
+                    value={exportDataInicio} 
+                    onChange={e => setExportDataInicio(e.target.value)} 
+                    className="w-full border border-amber-300 p-2 rounded bg-white font-medium" 
+                    required 
                   />
-                  <button 
-                    type="button"
-                    onClick={() => {
-                      if (csvPasswordInput === 'casavelha2026') {
-                        setCsvUnlocked(true);
-                      } else {
-                        alert('❌ Palavra-passe incorreta!');
-                      }
-                    }}
-                    className="bg-amber-700 hover:bg-amber-800 text-white font-bold px-4 py-2.5 rounded transition"
-                  >
-                    Desbloquear
-                  </button>
                 </div>
-              ) : (
-                <form onSubmit={handleExportCSV} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end text-xs pt-2">
-                  <div>
-                    <label className="block font-semibold text-amber-900 mb-1">Data Início Check-in</label>
-                    <input 
-                      type="date" 
-                      value={exportDataInicio} 
-                      onChange={e => setExportDataInicio(e.target.value)} 
-                      className="w-full border border-amber-300 p-2 rounded bg-white font-medium" 
-                      required 
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-amber-900 mb-1">Data Fim Check-in</label>
-                    <input 
-                      type="date" 
-                      value={exportDataFim} 
-                      onChange={e => setExportDataFim(e.target.value)} 
-                      className="w-full border border-amber-300 p-2 rounded bg-white font-medium" 
-                      required 
-                    />
-                  </div>
-                  <button 
-                    type="submit" 
-                    disabled={exporting}
-                    className="bg-amber-700 hover:bg-amber-800 text-white font-bold p-2.5 rounded transition shadow text-xs flex items-center justify-center gap-1 disabled:bg-slate-400"
-                  >
-                    {exporting ? 'A Gerar .CSV...' : '📄 Descarregar .CSV (AIMA)'}
-                  </button>
-                </form>
-              )}
+                <div>
+                  <label className="block font-semibold text-amber-900 mb-1">Data Fim Check-in</label>
+                  <input 
+                    type="date" 
+                    value={exportDataFim} 
+                    onChange={e => setExportDataFim(e.target.value)} 
+                    className="w-full border border-amber-300 p-2 rounded bg-white font-medium" 
+                    required 
+                  />
+                </div>
+                <button 
+                  type="submit" 
+                  disabled={exporting}
+                  className="bg-amber-700 hover:bg-amber-800 text-white font-bold p-2.5 rounded transition shadow text-xs flex items-center justify-center gap-1 disabled:bg-slate-400"
+                >
+                  {exporting ? 'A Gerar .CSV...' : '📄 Descarregar .CSV (AIMA)'}
+                </button>
+              </form>
             </div>
 
           </main>
@@ -1341,6 +1311,9 @@
                     </div>
                     <div>
                       <strong className="text-slate-600">Documento:</strong> {ultimoSucesso.docTipo || 'Documento'} N.º {ultimoSucesso.docNumero} {ultimoSucesso.docPais && ultimoSucesso.docPais !== 'Portugal' ? `(${ultimoSucesso.docPais})` : ''}
+                    </div>
+                    <div>
+                      <strong className="text-slate-600">Reserva:</strong> {ultimoSucesso.numeroReserva} ({ultimoSucesso.plataformaReserva})
                     </div>
                     {ultimoSucesso.eMenor === 'Sim' && (
                       <div className="p-2 bg-purple-50 rounded border border-purple-200">
