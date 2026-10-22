@@ -127,7 +127,7 @@
       const [exportDataInicio, setExportDataInicio] = useState(todayStr);
       const [exportDataFim, setExportDataFim] = useState(todayStr);
 
-      // Cálculo dinâmico do número de noites
+      // Duração da Estadia em Noites
       const [numeroNoites, setNumeroNoites] = useState(0);
 
       const calcularDiferencaNoites = (d1Str, d2Str) => {
@@ -142,6 +142,18 @@
       useEffect(() => {
         setNumeroNoites(calcularDiferencaNoites(novoBoletim.dataEntrada, novoBoletim.dataSaida));
       }, [novoBoletim.dataEntrada, novoBoletim.dataSaida]);
+
+      // Regra de Cálculo da Taxa Turística de Matosinhos (2€/noite até max 7 noites = max 14€; Isenção < 16 anos)
+      const noitesTributaveis = Math.min(numeroNoites, 7);
+      const taxaSugeridaMatosinhos = (idadeCalculada !== null && idadeCalculada < 16) 
+        ? 0 
+        : (noitesTributaveis * 2);
+
+      const valorTaxaNum = Number(novoBoletim.taxaTuristica);
+      const menorComTaxaIncorreta = idadeCalculada !== null && idadeCalculada < 16 && valorTaxaNum > 0;
+      const taxaExcedeLimiteMaximo = valorTaxaNum > 14;
+
+      const taxaComAvisoErro = menorComTaxaIncorreta || taxaExcedeLimiteMaximo;
 
       useEffect(() => {
         fetch(GOOGLE_SCRIPT_URL, {
@@ -159,7 +171,7 @@
         .catch(() => {});
       }, []);
 
-      // Deteção Automática de Hóspede Recorrente ao digitar o número de documento
+      // Deteção Automática de Hóspede Recorrente por Documento
       useEffect(() => {
         const docLimpo = novoBoletim.docNumero.trim();
         if (docLimpo.length < 4) {
@@ -178,7 +190,7 @@
             const result = await response.json();
 
             if (result.status === "success" && result.data && result.data.length > 0) {
-              const ultimoRegisto = result.data[result.data.length - 1]; // Obtém o registo mais recente
+              const ultimoRegisto = result.data[result.data.length - 1];
               const totalEstadias = result.data.length;
 
               setAlertaRecorrente({
@@ -187,7 +199,6 @@
                 ultimaEntrada: ultimoRegisto.dataEntrada
               });
 
-              // Preenchimento Automático do Formulário com dados do último registo
               setNovoBoletim(prev => ({
                 ...prev,
                 nome: ultimoRegisto.nome || prev.nome,
@@ -197,7 +208,6 @@
                 paisResidencia: ultimoRegisto.paisResidencia || prev.paisResidencia
               }));
 
-              // Se existir data de nascimento válida, ajusta os selectores
               if (ultimoRegisto.dataNascimento) {
                 const dClean = String(ultimoRegisto.dataNascimento).slice(0, 10);
                 const parts = dClean.split('-');
@@ -212,11 +222,10 @@
               setAlertaRecorrente(null);
             }
           } catch (e) {
-            // Silencioso em caso de erro de rede temporário
           } finally {
             setVerificandoDoc(false);
           }
-        }, 600); // Aguarda 600ms após o utilizador parar de digitar
+        }, 600);
 
         return () => clearTimeout(timer);
       }, [novoBoletim.docNumero]);
@@ -250,6 +259,12 @@
 
         if (!isNaN(idade)) {
           setIdadeCalculada(idade);
+
+          // Ajusta a sugestão da taxa se for menor de 16 anos
+          if (idade < 16 && (novoBoletim.taxaTuristica === '' || novoBoletim.taxaTuristica === '0')) {
+            setNovoBoletim(prev => ({ ...prev, taxaTuristica: '0.00' }));
+          }
+
           if (idade < 18) {
             setNovoBoletim(prev => ({
               ...prev,
@@ -712,7 +727,7 @@
               </form>
             </div>
 
-            {/* PAINEL 3: NOVO FORMULÁRIO DE CHECK-IN (COM BOTÃO/SETA PARA COLAPSAR) */}
+            {/* PAINEL 3: NOVO FORMULÁRIO DE CHECK-IN */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <div 
                 onClick={() => setShowBoletimForm(!showBoletimForm)}
@@ -758,7 +773,7 @@
 
                   <form onSubmit={handleSubmit} className="space-y-4 text-sm">
                     
-                    {/* 2. Documento (COLOCADO EM PRIMEIRO LUGAR DE DADOS PARA PERMITIR AUTOCOMPLETAR) */}
+                    {/* 1. Documento de Identificação */}
                     <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
                       <div className="flex justify-between items-center">
                         <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">
@@ -813,7 +828,6 @@
                       <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">2. Dados Pessoais do Hóspede</h3>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         
-                        {/* NOME COMPLETO: LARGURA TOTAL ALINHADA */}
                         <div className="sm:col-span-3">
                           <label className="block text-xs font-semibold text-slate-700 mb-1">Nome Completo *</label>
                           <input 
@@ -826,7 +840,7 @@
                           />
                         </div>
 
-                        {/* SELEÇÃO RÁPIDA DE DATA DE NASCIMENTO */}
+                        {/* SELEÇÃO DE NASCIMENTO */}
                         <div className="sm:col-span-3 bg-white p-3 rounded border border-slate-200">
                           <div className="flex justify-between items-center mb-1.5">
                             <label className="block text-xs font-semibold text-slate-700">Data de Nascimento *</label>
@@ -993,8 +1007,82 @@
                         </div>
                       </div>
 
-                      {/* VALOR RESERVA, TAXA TURÍSTICA E MODO PAGAMENTO NA MESMA LINHA */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                      {/* JANELA / ALERTA DE CÁLCULO DA TAXA TURÍSTICA DE MATOSINHOS */}
+                      <div className={`p-3.5 rounded-lg border text-xs space-y-2 transition-all ${
+                        taxaComAvisoErro 
+                          ? 'bg-rose-50 border-rose-400 text-rose-900 ring-2 ring-rose-500/30' 
+                          : 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                      }`}>
+                        <div className="flex justify-between items-center font-bold">
+                          <span className="flex items-center gap-1.5">
+                            🏛️ Taxa Municipal Turística (Matosinhos):
+                          </span>
+                          <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-white border border-emerald-200">
+                            Sugestão: {taxaSugeridaMatosinhos.toFixed(2)} €
+                          </span>
+                        </div>
+
+                        {/* AVISO A VERMELHO PARA MENORES DE 16 ANOS COM TAXA > 0€ */}
+                        {menorComTaxaIncorreta && (
+                          <div className="text-rose-700 font-bold bg-white p-2.5 rounded border border-rose-300 space-y-1">
+                            <div className="flex items-center gap-1 text-xs">
+                              ⚠️ <strong>Atenção ao Valor da Taxa:</strong> Hóspede tem apenas {idadeCalculada} anos!
+                            </div>
+                            <p className="text-[11px] font-normal text-rose-800">
+                              O Regulamento Municipal de Matosinhos estipula <strong>isenção total da taxa turística para menores de 16 anos</strong>. Recomendamos definir o valor para <strong>0.00 €</strong>.
+                            </p>
+                            <button 
+                              type="button" 
+                              onClick={() => setNovoBoletim({...novoBoletim, taxaTuristica: '0.00'})}
+                              className="mt-1 bg-rose-600 hover:bg-rose-700 text-white px-2.5 py-1 rounded text-[11px] font-bold"
+                            >
+                              Ajustar para 0.00 € (Isenção)
+                            </button>
+                          </div>
+                        )}
+
+                        {/* AVISO A VERMELHO PARA VALORES SUPERIORES A 14€ */}
+                        {taxaExcedeLimiteMaximo && !menorComTaxaIncorreta && (
+                          <div className="text-rose-700 font-bold bg-white p-2.5 rounded border border-rose-300 space-y-1">
+                            <div className="flex items-center gap-1 text-xs">
+                              ⚠️ <strong>Atenção ao Valor da Taxa:</strong> O valor introduzido ({valorTaxaNum.toFixed(2)} €) excede o limite máximo legal!
+                            </div>
+                            <p className="text-[11px] font-normal text-rose-800">
+                              O Regulamento Municipal de Matosinhos limita a cobrança a um <strong>máximo de 7 noites consecutivas</strong> (7 x 2.00 € = <strong>14.00 € por pessoa/estadia</strong>).
+                            </p>
+                            <button 
+                              type="button" 
+                              onClick={() => setNovoBoletim({...novoBoletim, taxaTuristica: '14.00'})}
+                              className="mt-1 bg-rose-600 hover:bg-rose-700 text-white px-2.5 py-1 rounded text-[11px] font-bold"
+                            >
+                              Ajustar para 14.00 € (Teto Máximo)
+                            </button>
+                          </div>
+                        )}
+
+                        {!taxaComAvisoErro && (
+                          <div className="text-[11px] text-emerald-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                            <span>
+                              {idadeCalculada !== null && idadeCalculada < 16 ? (
+                                <span>Isenção aplicada por idade (&lt; 16 anos).</span>
+                              ) : (
+                                <span>Cálculo: <strong>{noitesTributaveis} noites</strong> (máx. 7) x <strong>2.00 €/noite</strong> = <strong>{taxaSugeridaMatosinhos.toFixed(2)} €</strong></span>
+                              )}
+                            </span>
+                            
+                            <button 
+                              type="button" 
+                              onClick={() => setNovoBoletim({...novoBoletim, taxaTuristica: taxaSugeridaMatosinhos.toFixed(2)})}
+                              className="text-emerald-700 hover:text-emerald-950 font-bold underline cursor-pointer text-[11px]"
+                            >
+                              Aplicar valor sugerido ({taxaSugeridaMatosinhos.toFixed(2)} €)
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* VALOR RESERVA, TAXA TURÍSTICA E MODO PAGAMENTO */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
                         <div>
                           <label className="block text-xs font-semibold text-emerald-800 mb-1">Valor Reserva (€)</label>
                           <input 
@@ -1007,14 +1095,20 @@
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-semibold text-emerald-800 mb-1">Taxa Turística (€)</label>
+                          <label className={`block text-xs font-semibold mb-1 ${taxaComAvisoErro ? 'text-rose-700' : 'text-emerald-800'}`}>
+                            Taxa Turística (€) *
+                          </label>
                           <input 
                             type="number" 
                             step="0.01"
                             placeholder="Ex: 4.00" 
                             value={novoBoletim.taxaTuristica} 
                             onChange={e => setNovoBoletim({...novoBoletim, taxaTuristica: e.target.value})} 
-                            className="w-full border border-emerald-300 p-2.5 rounded bg-emerald-50/50 font-bold text-emerald-900 focus:ring-2 focus:ring-emerald-500 outline-none" 
+                            className={`w-full border p-2.5 rounded font-bold focus:ring-2 outline-none ${
+                              taxaComAvisoErro 
+                                ? 'border-rose-500 bg-rose-50 text-rose-900 focus:ring-rose-500' 
+                                : 'border-emerald-300 bg-emerald-50/50 text-emerald-900 focus:ring-emerald-500'
+                            }`} 
                           />
                         </div>
                         <div>
@@ -1090,7 +1184,7 @@
             </div>
           )}
 
-          {/* MODAL DE SUCESSO & IMPRESSÃO CORRIGIDA */}
+          {/* MODAL DE SUCESSO & IMPRESSÃO */}
           {ultimoSucesso && (
             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
               <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-slate-200">
