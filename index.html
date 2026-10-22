@@ -157,6 +157,19 @@
       const taxaExcedeLimiteMaximo = valorTaxaNum > 14;
       const taxaComAvisoErro = menorComTaxaIncorreta || taxaExcedeLimiteMaximo;
 
+      const formatarDataLimpa = (dStr) => {
+        if (!dStr) return '';
+        const str = String(dStr).trim();
+        if (str.length >= 10 && str.match(/^\d{4}-\d{2}-\d{2}/)) {
+          return str.slice(0, 10);
+        }
+        const d = new Date(str);
+        if (!isNaN(d.getTime())) {
+          return d.toISOString().slice(0, 10);
+        }
+        return str.slice(0, 10);
+      };
+
       useEffect(() => {
         fetch(GOOGLE_SCRIPT_URL, {
           method: 'POST',
@@ -195,22 +208,23 @@
               const totalEstadias = result.data.length;
 
               setAlertaRecorrente({
-                nome: ultimoRegisto.nome,
+                nome: ultimoRegisto.nome || ultimoRegisto.Nome || '',
                 estadias: totalEstadias,
-                ultimaEntrada: ultimoRegisto.dataEntrada
+                ultimaEntrada: ultimoRegisto.dataEntrada || ultimoRegisto.dataCheckin || ultimoRegisto.Data_Entrada || ''
               });
 
               setNovoBoletim(prev => ({
                 ...prev,
-                nome: ultimoRegisto.nome || prev.nome,
-                nacionalidade: ultimoRegisto.nacionalidade || prev.nacionalidade,
-                docTipo: ultimoRegisto.docTipo || prev.docTipo,
-                docPais: ultimoRegisto.docPais || prev.docPais,
-                paisResidencia: ultimoRegisto.paisResidencia || prev.paisResidencia
+                nome: ultimoRegisto.nome || ultimoRegisto.Nome || prev.nome,
+                nacionalidade: ultimoRegisto.nacionalidade || ultimoRegisto.Nacionalidade || prev.nacionalidade,
+                docTipo: ultimoRegisto.docTipo || ultimoRegisto.Tipo_Documento || prev.docTipo,
+                docPais: ultimoRegisto.docPais || ultimoRegisto.Pais_Emissor || prev.docPais,
+                paisResidencia: ultimoRegisto.paisResidencia || ultimoRegisto.Pais_Residencia || prev.paisResidencia
               }));
 
-              if (ultimoRegisto.dataNascimento) {
-                const dClean = String(ultimoRegisto.dataNascimento).slice(0, 10);
+              const rawNasce = ultimoRegisto.dataNascimento || ultimoRegisto.Data_Nascimento || '';
+              if (rawNasce) {
+                const dClean = formatarDataLimpa(rawNasce);
                 const parts = dClean.split('-');
                 if (parts.length === 3) {
                   setNasceAno(parts[0]);
@@ -266,23 +280,10 @@
             taxaTuristica: valorSugerido,
             eMenor: idade < 18 ? 'Sim' : 'Não',
             titularDoc: idade < 18 ? (prev.titularDoc === 'Próprio' ? 'Documento do Acompanhante' : prev.titularDoc) : 'Próprio',
-            qualidadeAcompanhante: idade < 18 ? (prev.qualidadeAcompanhante === 'N/A' ? 'Pai / Mãe' : prev.qualidadeAcompanhante) : 'N/A'
+            qualidadeAcompanhante: idade < 18 ? (prev.qualidadeAcompanhante === 'N/A' ? 'Pai, Mãe' : prev.qualidadeAcompanhante) : 'N/A'
           }));
         }
       }, [novoBoletim.dataNascimento, novoBoletim.dataEntrada, numeroNoites]);
-
-      const formatarDataLimpa = (dStr) => {
-        if (!dStr) return '';
-        const str = String(dStr).trim();
-        if (str.length >= 10 && str.match(/^\d{4}-\d{2}-\d{2}/)) {
-          return str.slice(0, 10);
-        }
-        const d = new Date(str);
-        if (!isNaN(d.getTime())) {
-          return d.toISOString().slice(0, 10);
-        }
-        return str.slice(0, 10);
-      };
 
       const gerarIDBoletim = () => {
         const d = new Date();
@@ -332,7 +333,6 @@
             signal: controller.signal
           });
         } catch (error) {
-          // Ignora timeouts para garantir abertura imediata do comprovativo
         } finally {
           clearTimeout(timeoutId);
           setLoading(false);
@@ -379,8 +379,26 @@
           const result = await response.json();
 
           if (result.status === "success") {
-            setSearchResults(result.data || []);
-            if (!result.data || result.data.length === 0) {
+            const mappedData = (result.data || []).map(r => ({
+              ...r,
+              dEntradaFormatada: formatarDataLimpa(r.dataEntrada || r.dataCheckin || r.Data_Entrada),
+              dSaidaFormatada: formatarDataLimpa(r.dataSaida || r.dataCheckout || r.Data_Saida_Prevista),
+              dNascimentoFormatada: formatarDataLimpa(r.dataNascimento || r.Data_Nascimento),
+              nomeGuelst: r.nome || r.Nome || '',
+              docNumeroClean: r.docNumero || r.Numero_Documento || '',
+              docTipoClean: r.docTipo || r.Tipo_Documento || 'Cartão de Cidadão / BI',
+              docPaisClean: r.docPais || r.Pais_Emissor || 'Portugal',
+              nacionalidadeClean: r.nacionalidade || r.Nacionalidade || 'Portugal',
+              paisResidenciaClean: r.paisResidencia || r.Pais_Residencia || 'Portugal',
+              alojamentoClean: r.tipoAlojamento || r.Tipo_Alojamento || 'Quarto Duplo com Vista Mar',
+              unidadeClean: r.numeroUnidade || r.Numero_Unidade || '1',
+              valorReservaClean: r.valorReserva || r.Valor_Reserva || '0.00',
+              taxaTuristicaClean: r.taxaTuristica || r.Taxa_Turistica || '0.00',
+              modoPagamentoClean: r.modoPagamento || r.Modo_Pagamento || 'Numerário',
+              funcionarioRececaoClean: r.funcionarioRececao || r.Funcionario_Rececao || ''
+            }));
+            setSearchResults(mappedData);
+            if (mappedData.length === 0) {
               alert('Nenhum registo encontrado com o termo pesquisado.');
             }
           }
@@ -392,7 +410,7 @@
       };
 
       const handleUpdateCheckout = async () => {
-        if (!novaDataSaida || novaDataSaida <= editingRegisto.dataEntrada) {
+        if (!novaDataSaida || novaDataSaida <= editingRegisto.dEntradaFormatada) {
           alert('A nova data de saída deve ser posterior à data de check-in.');
           return;
         }
@@ -427,32 +445,38 @@
       };
 
       const handlePrintFromSearch = (r) => {
-        const dEntrada = formatarDataLimpa(r.dataEntrada);
-        const dSaida = formatarDataLimpa(r.dataSaida);
+        const dEntrada = r.dEntradaFormatada || formatarDataLimpa(r.dataEntrada);
+        const dSaida = r.dSaidaFormatada || formatarDataLimpa(r.dataSaida);
         const noites = calcularDiferencaNoites(dEntrada, dSaida);
 
+        const funcString = r.funcionarioRececaoClean || r.funcionarioRececao || selectedFuncObj.nome;
+        let funcIdExtracted = selectedFuncObj.id || '';
+        if (funcString.includes('[') && funcString.includes(']')) {
+          funcIdExtracted = funcString.split('[')[1].split(']')[0];
+        }
+
         const payloadFromSearch = {
-          idBoletim: r.idBoletim,
-          nome: r.nome,
-          dataNascimento: formatarDataLimpa(r.dataNascimento),
-          nacionalidade: r.nacionalidade || 'Portugal',
-          paisResidencia: r.paisResidencia || 'Portugal',
-          docTipo: r.docTipo || 'Cartão de Cidadão / BI',
-          docNumero: r.docNumero || '',
-          docPais: r.docPais || 'Portugal',
-          tipoAlojamento: r.tipoAlojamento,
-          numeroUnidade: r.numeroUnidade,
+          idBoletim: r.idBoletim || 'CV-HIST',
+          nome: r.nomeGuelst || r.nome,
+          dataNascimento: r.dNascimentoFormatada || formatarDataLimpa(r.dataNascimento),
+          nacionalidade: r.nacionalidadeClean || 'Portugal',
+          paisResidencia: r.paisResidenciaClean || 'Portugal',
+          docTipo: r.docTipoClean || 'Cartão de Cidadão / BI',
+          docNumero: r.docNumeroClean || '',
+          docPais: r.docPaisClean || 'Portugal',
+          tipoAlojamento: r.alojamentoClean,
+          numeroUnidade: r.unidadeClean,
           dataEntrada: dEntrada,
           dataSaida: dSaida,
           noitesCalculadas: noites,
           eMenor: r.eMenor || 'Não',
           titularDoc: r.titularDoc || 'Próprio',
           qualidadeAcompanhante: r.qualidadeAcompanhante || 'N/A',
-          valorReserva: r.valorReserva || '',
-          taxaTuristica: r.taxaTuristica || '',
-          modoPagamento: r.modoPagamento || 'Numerário',
-          funcionarioNome: r.funcionarioRececao || selectedFuncObj.nome,
-          funcionarioId: selectedFuncObj.id || ''
+          valorReserva: r.valorReservaClean,
+          taxaTuristica: r.taxaTuristicaClean,
+          modoPagamento: r.modoPagamentoClean,
+          funcionarioNome: funcString,
+          funcionarioId: funcIdExtracted
         };
         setUltimoSucesso(payloadFromSearch);
       };
@@ -600,7 +624,7 @@
 
             {/* PAINEL 1: PESQUISAR E ALTERAR CHECK-OUT PREVISTO */}
             <div className="bg-blue-50 p-5 rounded-xl border border-blue-200 shadow-sm space-y-3">
-              <h2 className="text-sm font-bold text-blue-900">🔍 Pesquisar Hóspede / Alterar Check-out / 2ª Via</h2>
+              <h2 className="text-sm font-bold text-blue-900">🔍 Pesquisar Hóspede, Alterar Check-out, 2ª Via</h2>
               <p className="text-xs text-blue-700">Utilize esta secção para pesquisar registos anteriores, emitir segundas vias do boletim ou alterar a data de saída prevista.</p>
 
               <form onSubmit={handleSearch} className="flex gap-2 text-xs">
@@ -624,11 +648,11 @@
               {searchResults.length > 0 && (
                 <div className="mt-3 bg-white rounded border border-blue-200 divide-y text-xs">
                   {searchResults.map(r => (
-                    <div key={r.rowIndex} className="p-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <div key={r.rowIndex || r.idBoletim} className="p-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                       <div>
-                        <div className="font-bold text-slate-900">{r.nome} <span className="text-blue-600 font-mono">({r.idBoletim})</span></div>
-                        <div className="text-slate-500">{r.docTipo}: {r.docNumero} | {r.tipoAlojamento} (Unidade {r.numeroUnidade})</div>
-                        <div className="text-slate-700 font-medium">Entrada: {formatarDataLimpa(r.dataEntrada)} → Saída Atual: <span className="text-amber-700 font-bold">{formatarDataLimpa(r.dataSaida)}</span></div>
+                        <div className="font-bold text-slate-900">{r.nomeGuelst} <span className="text-blue-600 font-mono">({r.idBoletim})</span></div>
+                        <div className="text-slate-500">{r.docTipoClean}: {r.docNumeroClean} | {r.alojamentoClean} (Unidade {r.unidadeClean})</div>
+                        <div className="text-slate-700 font-medium">Entrada: {r.dEntradaFormatada} → Saída Atual: <span className="text-amber-700 font-bold">{r.dSaidaFormatada}</span></div>
                       </div>
                       <div className="flex gap-2 self-end sm:self-auto">
                         <button 
@@ -638,7 +662,7 @@
                           🖨️ 2ª Via
                         </button>
                         <button 
-                          onClick={() => { setEditingRegisto(r); setNovaDataSaida(formatarDataLimpa(r.dataSaida)); }} 
+                          onClick={() => { setEditingRegisto(r); setNovaDataSaida(r.dSaidaFormatada); }} 
                           className="bg-amber-600 hover:bg-amber-700 text-white font-semibold px-3 py-1.5 rounded"
                         >
                           Alterar Check-out
@@ -651,7 +675,7 @@
 
               {editingRegisto && (
                 <div className="mt-3 p-4 bg-amber-100 rounded border border-amber-300 text-xs space-y-2">
-                  <div className="font-bold text-amber-900">Alterar Saída Prevista para: {editingRegisto.nome}</div>
+                  <div className="font-bold text-amber-900">Alterar Saída Prevista para: {editingRegisto.nomeGuelst}</div>
                   <div className="flex items-center gap-3">
                     <div>
                       <label className="block font-semibold text-amber-900 mb-1">Nova Data de Check-out Prevista:</label>
@@ -917,7 +941,7 @@
                               onChange={e => setNovoBoletim({...novoBoletim, qualidadeAcompanhante: e.target.value})} 
                               className="w-full border border-purple-300 p-2.5 rounded bg-white font-medium"
                             >
-                              <option value="Pai / Mãe">Pai / Mãe</option>
+                              <option value="Pai, Mãe">Pai, Mãe</option>
                               <option value="Tutor Legal">Tutor Legal</option>
                               <option value="Outro Familiar">Outro Familiar</option>
                               <option value="Acompanhante Autorizado">Acompanhante Autorizado</option>
@@ -929,7 +953,7 @@
 
                     {/* 3. Estadia & Valores Financeiros */}
                     <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
-                      <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">3. Período da Estadia & Pagamentos</h3>
+                      <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">3. Período da Estadia, Pagamentos</h3>
                       
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
                         <div>
@@ -1112,7 +1136,7 @@
                   <button 
                     type="button"
                     onClick={() => {
-                      if (csvPasswordInput === 'casavelha2026') { // Palavra-passe de administrador configurada
+                      if (csvPasswordInput === 'casavelha2026') {
                         setCsvUnlocked(true);
                       } else {
                         alert('❌ Palavra-passe incorreta!');
@@ -1164,7 +1188,7 @@
               <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200">
                 <div className="text-center border-b pb-3">
                   <h2 className="text-lg font-bold text-slate-900">🏠 Casa Velha</h2>
-                  <p className="text-xs text-slate-500">Informação Legal & Registo de Alojamento Local</p>
+                  <p className="text-xs text-slate-500">Informação Legal, Registo de Alojamento Local</p>
                 </div>
 
                 <div className="space-y-3 text-xs text-slate-700">
@@ -1211,7 +1235,7 @@
                 
                 <div id="printable-boletim" className="space-y-4 text-xs font-sans text-slate-800 p-2">
                   <div className="text-center border-b pb-3">
-                    <h2 className="text-base font-bold text-slate-900">🏠 Casa Velha - Comprovativo de Check-in</h2>
+                    <h2 className="text-base font-bold text-slate-900">🏠 Casa Velha, Comprovativo de Check-in</h2>
                     <p className="text-[11px] text-slate-500">Boletim de Alojamento (RNAL n.º 166503/AL)</p>
                     <span className="inline-block mt-1 font-mono font-bold bg-blue-100 text-blue-900 px-2 py-0.5 rounded text-xs">
                       ID Boletim: {ultimoSucesso.idBoletim}
@@ -1263,7 +1287,7 @@
                     <div className="text-[10px] text-slate-500 font-mono">
                       {ultimoSucesso.funcionarioId && ultimoSucesso.funcionarioId !== 'N/A' 
                         ? `(ID: ${ultimoSucesso.funcionarioId})` 
-                        : (ultimoSucesso.funcionarioNome || '')}
+                        : (ultimoSucesso.funcionarioNome ? `(ID: ${ultimoSucesso.funcionarioNome})` : '(ID: EMP-001)')}
                     </div>
                   </div>
                 </div>
@@ -1273,7 +1297,7 @@
                     onClick={handlePrintBoletim}
                     className="flex-1 bg-slate-800 hover:bg-slate-900 text-white font-bold py-2.5 rounded-lg transition text-xs flex items-center justify-center gap-1.5"
                   >
-                    🖨️ Imprimir Boletim (PDF / Papel)
+                    🖨️ Imprimir Boletim (PDF, Papel)
                   </button>
                   <button 
                     onClick={() => setUltimoSucesso(null)}
