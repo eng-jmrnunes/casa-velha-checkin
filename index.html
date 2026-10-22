@@ -170,63 +170,57 @@
         return str.slice(0, 10);
       };
 
-      // Mapeamento idêntico ao formulário original para pesquisa e 2ª via
-      const extrairCampoGenerico = (obj, nomesPossiveis) => {
-        if (!obj) return '';
+      // Leitura exata dos campos com base na estrutura declarada da folha do Google
+      const lerCampoFolha = (r, nomesPossiveis) => {
+        if (!r) return '';
+        const keys = Object.keys(r);
         for (let nome of nomesPossiveis) {
-          if (obj[nome] !== undefined && obj[nome] !== null && String(obj[nome]).trim() !== '') {
-            return String(obj[nome]).trim();
+          if (r[nome] !== undefined && r[nome] !== null && String(r[nome]).trim() !== '') {
+            return String(r[nome]).trim();
           }
-        }
-        // Tenta pesquisa insensível a maiúsculas/minúsculas
-        const keys = Object.keys(obj);
-        for (let nome of nomesPossiveis) {
           const matchKey = keys.find(k => k.toLowerCase().replace(/[^a-z0-9]/g, '') === nome.toLowerCase().replace(/[^a-z0-9]/g, ''));
-          if (matchKey && obj[matchKey] !== undefined && obj[matchKey] !== null && String(obj[matchKey]).trim() !== '') {
-            return String(obj[matchKey]).trim();
+          if (matchKey && r[matchKey] !== undefined && r[matchKey] !== null && String(r[matchKey]).trim() !== '') {
+            return String(r[matchKey]).trim();
           }
         }
         return '';
       };
 
-      const construirObjetoOriginal = (r) => {
-        const rawNascimento = extrairCampoGenerico(r, ['dataNascimento', 'Data_Nascimento', 'nascimento', 'data_nasc']);
-        const rawEntrada = extrairCampoGenerico(r, ['dataEntrada', 'dataCheckin', 'Data_Entrada', 'checkin', 'entrada']);
-        const rawSaida = extrairCampoGenerico(r, ['dataSaida', 'dataCheckout', 'Data_Saida_Prevista', 'checkout', 'saida']);
+      const mapearRegistoDaFolha = (r) => {
+        const idBoletim = lerCampoFolha(r, ['ID_Boletim', 'idBoletim', 'id']) || 'CV-HIST';
+        const nome = lerCampoFolha(r, ['Nome', 'nome']);
+        const dataNascimento = formatarDataLimpa(lerCampoFolha(r, ['Data_Nascimento', 'dataNascimento', 'Nascimento']));
+        const nacionalidade = lerCampoFolha(r, ['Nacionalidade', 'nacionalidade']) || 'Portugal';
+        const docTipo = lerCampoFolha(r, ['Tipo_Documento', 'docTipo', 'tipodocumento']) || 'Cartão de Cidadão / BI';
+        const docNumero = lerCampoFolha(r, ['Numero_Documento', 'docNumero', 'numerodocumento']);
+        const docPais = lerCampoFolha(r, ['Pais_Emissor', 'docPais', 'paisemissor']) || 'Portugal';
+        const paisResidencia = lerCampoFolha(r, ['Pais_Residencia', 'paisResidencia', 'paisresidencia']) || 'Portugal';
+        
+        const dataEntrada = formatarDataLimpa(lerCampoFolha(r, ['Check_In', 'dataEntrada', 'dataCheckin', 'checkin']));
+        const dataSaida = formatarDataLimpa(lerCampoFolha(r, ['Check_Out', 'dataSaida', 'dataCheckout', 'checkout']));
+        
+        const tipoAlojamento = lerCampoFolha(r, ['Tipo_Alojamento', 'tipoAlojamento', 'alojamento']) || 'Quarto Duplo com Vista Mar';
+        const numeroUnidade = lerCampoFolha(r, ['Numero_Unidade', 'numeroUnidade', 'unidade']) || '1';
+        const eMenor = lerCampoFolha(r, ['E_Menor', 'eMenor', 'menor']) || 'Não';
+        const titularDoc = lerCampoFolha(r, ['Titular_Documento', 'titularDoc', 'titular']) || 'Próprio';
+        const qualidadeAcompanhante = lerCampoFolha(r, ['Qualidade_Acompanhante', 'qualidadeAcompanhante', 'acompanhante']) || 'N/A';
+        const valorReserva = lerCampoFolha(r, ['Valor_Reserva', 'valorReserva', 'reserva']) || '0.00';
+        const taxaTuristica = lerCampoFolha(r, ['Taxa_Turistica', 'taxaTuristica', 'taxa']) || '0.00';
+        const modoPagamento = lerCampoFolha(r, ['Modo_Pagamento', 'modoPagamento', 'pagamento']) || 'Numerário';
+        const funcRececao = lerCampoFolha(r, ['Funcionario_Rececao', 'funcionarioRececao', 'funcionario']) || selectedFuncObj.nome;
 
-        const dEntrada = formatarDataLimpa(rawEntrada);
-        const dSaida = formatarDataLimpa(rawSaida);
-        const dNasc = formatarDataLimpa(rawNascimento);
-
-        const noites = calcularDiferencaNoites(dEntrada, dSaida);
-
-        const idBoletim = extrairCampoGenerico(r, ['idBoletim', 'ID_Boletim', 'id', 'boletim']) || 'CV-HIST';
-        const nome = extrairCampoGenerico(r, ['nome', 'Nome', 'Nome_Completo', 'hospede']);
-        const docTipo = extrairCampoGenerico(r, ['docTipo', 'Tipo_Documento', 'tipodocumento', 'tipo_doc']) || 'Cartão de Cidadão / BI';
-        const docNumero = extrairCampoGenerico(r, ['docNumero', 'Numero_Documento', 'numerodocumento', 'num_doc']);
-        const docPais = extrairCampoGenerico(r, ['docPais', 'Pais_Emissor', 'paisemissor']) || 'Portugal';
-        const nacionalidade = extrairCampoGenerico(r, ['nacionalidade', 'Nacionalidade']) || 'Portugal';
-        const paisResidencia = extrairCampoGenerico(r, ['paisResidencia', 'Pais_Residencia', 'paisresidencia']) || 'Portugal';
-        const tipoAlojamento = extrairCampoGenerico(r, ['tipoAlojamento', 'Tipo_Alojamento', 'alojamento']) || 'Quarto Duplo com Vista Mar';
-        const numeroUnidade = extrairCampoGenerico(r, ['numeroUnidade', 'Numero_Unidade', 'unidade']) || '1';
-        const eMenor = extrairCampoGenerico(r, ['eMenor', 'Menor', 'menor']) || 'Não';
-        const titularDoc = extrairCampoGenerico(r, ['titularDoc', 'Titular_Documento', 'titular']) || 'Próprio';
-        const qualidadeAcompanhante = extrairCampoGenerico(r, ['qualidadeAcompanhante', 'Qualidade_Acompanhante', 'acompanhante']) || 'N/A';
-        const valorReserva = extrairCampoGenerico(r, ['valorReserva', 'Valor_Reserva', 'reserva']) || '0.00';
-        const taxaTuristica = extrairCampoGenerico(r, ['taxaTuristica', 'Taxa_Turistica', 'taxa']) || '0.00';
-        const modoPagamento = extrairCampoGenerico(r, ['modoPagamento', 'Modo_Pagamento', 'pagamento']) || 'Numerário';
-        const funcRececao = extrairCampoGenerico(r, ['funcionarioRececao', 'Funcionario_Rececao', 'funcionario', 'operador']) || selectedFuncObj.nome;
-
-        let funcId = extrairCampoGenerico(r, ['funcionarioId', 'Funcionario_ID', 'id_funcionario']);
-        if (!funcId && funcRececao && funcRececao.includes('[') && funcRececao.includes(']')) {
+        let funcId = '';
+        if (funcRececao && funcRececao.includes('[') && funcRececao.includes(']')) {
           funcId = funcRececao.split('[')[1].split(']')[0];
         }
+
+        const noites = calcularDiferencaNoites(dataEntrada, dataSaida);
 
         return {
           rowIndex: r.rowIndex,
           idBoletim,
           nome,
-          dataNascimento: dNasc,
+          dataNascimento,
           nacionalidade,
           paisResidencia,
           docTipo,
@@ -234,8 +228,8 @@
           docPais,
           tipoAlojamento,
           numeroUnidade,
-          dataEntrada: dEntrada,
-          dataSaida: dSaida,
+          dataEntrada,
+          dataSaida,
           noitesCalculadas: noites,
           eMenor,
           titularDoc,
@@ -283,7 +277,7 @@
 
             if (result.status === "success" && result.data && result.data.length > 0) {
               const ultimoRaw = result.data[result.data.length - 1];
-              const norm = construirObjetoOriginal(ultimoRaw);
+              const norm = mapearRegistoDaFolha(ultimoRaw);
               const totalEstadias = result.data.length;
 
               setAlertaRecorrente({
@@ -456,7 +450,7 @@
           const result = await response.json();
 
           if (result.status === "success") {
-            const listMapeada = (result.data || []).map(r => construirObjetoOriginal(r));
+            const listMapeada = (result.data || []).map(r => mapearRegistoDaFolha(r));
             setSearchResults(listMapeada);
 
             if (listMapeada.length === 0) {
@@ -506,7 +500,6 @@
       };
 
       const handlePrintFromSearch = (itemMapeado) => {
-        // Atribui diretamente o objeto construído para o modal de impressão igual ao original
         setUltimoSucesso(itemMapeado);
       };
 
