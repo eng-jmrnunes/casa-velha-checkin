@@ -123,6 +123,20 @@
       const [exportDataInicio, setExportDataInicio] = useState(todayStr);
       const [exportDataFim, setExportDataFim] = useState(todayStr);
 
+      // Cálculo dinâmico do número de noites
+      const [numeroNoites, setNumeroNoites] = useState(0);
+      useEffect(() => {
+        if (novoBoletim.dataEntrada && novoBoletim.dataSaida) {
+          const dIn = new Date(novoBoletim.dataEntrada);
+          const dOut = new Date(novoBoletim.dataSaida);
+          const diffTime = dOut - dIn;
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          setNumeroNoites(diffDays > 0 ? diffDays : 0);
+        } else {
+          setNumeroNoites(0);
+        }
+      }, [novoBoletim.dataEntrada, novoBoletim.dataSaida]);
+
       useEffect(() => {
         fetch(GOOGLE_SCRIPT_URL, {
           method: 'POST',
@@ -327,6 +341,33 @@
         }
       };
 
+      // Permitir imprimir 2ª via a partir de um resultado de pesquisa
+      const handlePrintFromSearch = (r) => {
+        const payloadFromSearch = {
+          idBoletim: r.idBoletim,
+          nome: r.nome,
+          dataNascimento: formatarDataLimpa(r.dataNascimento) || 'N/A',
+          nacionalidade: r.nacionalidade || 'Estrangeiro',
+          paisResidencia: r.paisResidencia || 'N/A',
+          docTipo: r.docTipo,
+          docNumero: r.docNumero,
+          docPais: r.docPais || 'N/A',
+          tipoAlojamento: r.tipoAlojamento,
+          numeroUnidade: r.numeroUnidade,
+          dataEntrada: formatarDataLimpa(r.dataEntrada),
+          dataSaida: formatarDataLimpa(r.dataSaida),
+          eMenor: 'Não',
+          titularDoc: 'Próprio',
+          qualidadeAcompanhante: 'N/A',
+          valorReserva: r.valorReserva || '',
+          taxaTuristica: r.taxaTuristica || '',
+          modoPagamento: r.modoPagamento || 'Numerário',
+          funcionarioNome: r.funcionarioRececao || selectedFuncObj.nome,
+          funcionarioId: selectedFuncObj.id || 'N/A'
+        };
+        setUltimoSucesso(payloadFromSearch);
+      };
+
       const handleExportCSV = async (e) => {
         e.preventDefault();
         setExporting(true);
@@ -403,7 +444,7 @@
         <div className="min-h-screen pb-12">
           {/* CABEÇALHO PRINCIPAL COM LOGIN INTEGRADO NO TOPO DIREITO */}
           <header className="bg-slate-900 text-white p-4 shadow-md">
-            <div className="max-w-3xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div className="max-w-4xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-xl font-bold">🏠 Casa Velha</h1>
@@ -414,14 +455,13 @@
                     ℹ️ Sobre
                   </button>
                 </div>
-                <p className="text-xs text-slate-400">Terminal de Check-in & AIMA (AL 166503/AL)</p>
+                <p className="text-xs text-slate-400">Terminal de Check-in (RNAL 166503/AL)</p>
               </div>
 
-              {/* LOGIN DO FUNCIONÁRIO NO CANTO SUPERIOR DIREITO */}
+              {/* LOGIN DO FUNCIONÁRIO NO CANTO SUPERIOR DIREITO (NOME MAIOR) */}
               <div className="bg-slate-800 p-2.5 rounded-lg border border-slate-700 flex items-center gap-2 text-xs w-full md:w-auto">
                 <span className="text-slate-400 font-semibold hidden sm:inline">👤 Receção:</span>
                 
-                {/* DROPDOWN DE NOME (ID OCULTO) */}
                 <div className="flex-1 md:flex-initial">
                   {funcionarios.length > 0 ? (
                     <select 
@@ -435,7 +475,7 @@
                           setSelectedFuncObj({ id: '', nome: val });
                         }
                       }}
-                      className="w-full bg-slate-900 text-white border border-slate-600 rounded px-2 py-1 font-bold outline-none focus:ring-1 focus:ring-blue-500 text-xs"
+                      className="w-full md:w-60 bg-slate-900 text-white border border-slate-600 rounded px-2 py-1.5 font-bold outline-none focus:ring-1 focus:ring-blue-500 text-xs"
                     >
                       {funcionarios.map(f => (
                         <option key={f.id || f.nome} value={f.id || f.nome}>
@@ -449,12 +489,11 @@
                       placeholder="Nome do Funcionário" 
                       value={selectedFuncObj.nome}
                       onChange={e => setSelectedFuncObj({ id: 'FUNC', nome: e.target.value })}
-                      className="w-full bg-slate-900 text-white border border-slate-600 rounded px-2 py-1 font-bold text-xs"
+                      className="w-full md:w-60 bg-slate-900 text-white border border-slate-600 rounded px-2 py-1.5 font-bold text-xs"
                     />
                   )}
                 </div>
 
-                {/* PASS INATIVA */}
                 <input 
                   type="password" 
                   placeholder="••••" 
@@ -462,18 +501,19 @@
                   onChange={e => setPasswordInativa(e.target.value)} 
                   disabled
                   title="Palavra-passe (Desativada temporariamente)"
-                  className="w-16 bg-slate-950 text-slate-600 border border-slate-700 rounded px-2 py-1 cursor-not-allowed text-xs text-center"
+                  className="w-16 bg-slate-950 text-slate-600 border border-slate-700 rounded px-2 py-1.5 cursor-not-allowed text-xs text-center"
                 />
               </div>
             </div>
           </header>
 
-          <main className="max-w-3xl mx-auto p-4 mt-4 space-y-6">
+          {/* LAYOUT ALARGADO (max-w-4xl) */}
+          <main className="max-w-4xl mx-auto p-4 mt-4 space-y-6">
 
-            {/* PAINEL 1: PESQUISAR E ALTERAR CHECK-OUT PREVISTO */}
+            {/* PAINEL 1: PESQUISAR E ALTERAR CHECK-OUT PREVISTO / IMPRIMIR 2ª VIA */}
             <div className="bg-blue-50 p-5 rounded-xl border border-blue-200 shadow-sm space-y-3">
-              <h2 className="text-sm font-bold text-blue-900">🔍 Pesquisar Hóspede / Alterar Data de Check-out</h2>
-              <p className="text-xs text-blue-700">Utilize esta secção se o hóspede prolongar a estadia ou precisar de alterar a data de saída prevista.</p>
+              <h2 className="text-sm font-bold text-blue-900">🔍 Pesquisar Hóspede / Alterar Check-out / 2ª Via</h2>
+              <p className="text-xs text-blue-700">Utilize esta secção para pesquisar registos anteriores, emitir segundas vias do boletim ou alterar a data de saída prevista.</p>
 
               <form onSubmit={handleSearch} className="flex gap-2 text-xs">
                 <input 
@@ -496,18 +536,27 @@
               {searchResults.length > 0 && (
                 <div className="mt-3 bg-white rounded border border-blue-200 divide-y text-xs">
                   {searchResults.map(r => (
-                    <div key={r.rowIndex} className="p-3 flex justify-between items-center">
+                    <div key={r.rowIndex} className="p-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                       <div>
                         <div className="font-bold text-slate-900">{r.nome} <span className="text-blue-600 font-mono">({r.idBoletim})</span></div>
                         <div className="text-slate-500">{r.docTipo}: {r.docNumero} | {r.tipoAlojamento} (Unidade {r.numeroUnidade})</div>
                         <div className="text-slate-700 font-medium">Entrada: {formatarDataLimpa(r.dataEntrada)} → Saída Atual: <span className="text-amber-700 font-bold">{formatarDataLimpa(r.dataSaida)}</span></div>
                       </div>
-                      <button 
-                        onClick={() => { setEditingRegisto(r); setNovaDataSaida(formatarDataLimpa(r.dataSaida)); }} 
-                        className="bg-amber-600 hover:bg-amber-700 text-white font-semibold px-3 py-1.5 rounded"
-                      >
-                        Alterar Check-out
-                      </button>
+                      <div className="flex gap-2 self-end sm:self-auto">
+                        <button 
+                          onClick={() => handlePrintFromSearch(r)} 
+                          className="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-3 py-1.5 rounded flex items-center gap-1"
+                          title="Imprimir 2ª Via do Boletim"
+                        >
+                          🖨️ 2ª Via
+                        </button>
+                        <button 
+                          onClick={() => { setEditingRegisto(r); setNovaDataSaida(formatarDataLimpa(r.dataSaida)); }} 
+                          className="bg-amber-600 hover:bg-amber-700 text-white font-semibold px-3 py-1.5 rounded"
+                        >
+                          Alterar Check-out
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -581,7 +630,7 @@
               </form>
             </div>
 
-            {/* PAINEL 3: NOVO FORMULÁRIO DE CHECK-IN (COM BOTAO/SETA PARA COLAPSAR) */}
+            {/* PAINEL 3: NOVO FORMULÁRIO DE CHECK-IN (COM BOTÃO/SETA PARA COLAPSAR) */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <div 
                 onClick={() => setShowBoletimForm(!showBoletimForm)}
@@ -798,30 +847,34 @@
                       </div>
                     </div>
 
-                    {/* 3. Estadia & Valores Financeiros na Mesma Linha */}
+                    {/* 3. Estadia & Valores Financeiros (Datas compactas na mesma linha + Contador de Noites) */}
                     <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
                       <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">3. Período da Estadia & Pagamentos</h3>
                       
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
                         <div>
                           <label className="block text-xs font-semibold text-slate-700 mb-1">Data de Entrada (Check-in) *</label>
                           <input 
                             type="date" 
                             value={novoBoletim.dataEntrada} 
                             onChange={e => setNovoBoletim({...novoBoletim, dataEntrada: e.target.value})} 
-                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none" 
+                            className="w-full border border-slate-300 p-2 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none" 
                             required 
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">Data Prevista de Saída (Check-out) *</label>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Data Prevista Saída (Check-out) *</label>
                           <input 
                             type="date" 
                             value={novoBoletim.dataSaida} 
                             onChange={e => setNovoBoletim({...novoBoletim, dataSaida: e.target.value})} 
-                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none" 
+                            className="w-full border border-slate-300 p-2 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none" 
                             required 
                           />
+                        </div>
+                        <div className="bg-white border border-slate-300 p-2 rounded text-center">
+                          <span className="text-[10px] block text-slate-500 font-semibold uppercase">Duração da Estadia</span>
+                          <span className="text-xs font-bold text-blue-900">{numeroNoites} {numeroNoites === 1 ? 'Noite' : 'Noites'}</span>
                         </div>
                       </div>
 
@@ -967,7 +1020,7 @@
                   {/* IDENTIFICAÇÃO DO FUNCIONÁRIO COM ID NA IMPRESSÃO */}
                   <div className="pt-2 text-right border-t border-slate-200">
                     <div className="text-[10px] text-slate-500">
-                      Funcionário Atendente: <strong>{ultimoSucesso.funcionarioNome}</strong> {ultimoSucesso.funcionarioId !== 'N/A' && <span className="font-mono text-slate-700">(ID: {ultimoSucesso.funcionarioId})</span>}
+                      Funcionário Atendente: <strong>{ultimoSucesso.funcionarioNome}</strong> {ultimoSucesso.funcionarioId && ultimoSucesso.funcionarioId !== 'N/A' && <span className="font-mono text-slate-700">(ID: {ultimoSucesso.funcionarioId})</span>}
                     </div>
                   </div>
                 </div>
