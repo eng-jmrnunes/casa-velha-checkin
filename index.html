@@ -252,6 +252,7 @@
         }
       };
 
+      // EXPORTAÇÃO .CSV COM BOM (UTF-8) PARA FORÇAR ACENTOS CORRETOS
       const handleExportCSV = async (e) => {
         e.preventDefault();
         setExporting(true);
@@ -278,7 +279,8 @@
               return;
             }
 
-            let csvContent = "data:text/csv;charset=utf-8,";
+            // Adicionado \uFEFF para forçar a codificação UTF-8 correta no Excel e Portal AIMA
+            let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
             csvContent += "Nome_Completo,Data_Nascimento,Nacionalidade,Tipo_Documento,Numero_Documento,Pais_Emissor,Pais_Residencia,Data_Entrada,Data_Saida_Prevista\n";
 
             list.forEach(h => {
@@ -305,7 +307,6 @@
         }
       };
 
-      // IMPRESSÃO COM NOME DE FICHEIRO PDF AUTOMÁTICO (ID + NOME)
       const handlePrintBoletim = () => {
         if (!ultimoSucesso) return;
 
