@@ -18,6 +18,14 @@
     // ⚠️ COLE AQUI O SEU LINK DO GOOGLE APPS SCRIPT
     const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzZitsCHoHUdgDwb2g8OrJEUm6tkXob-XhiywGuRt2ZAIPH9pwTWVvXGc2hQzA4psfbTg/exec";
 
+    // Tipos de Alojamento Exatos da Casa Velha
+    const TIPOS_ALOJAMENTO = [
+      "Quarto Duplo com Vista Mar",
+      "Quarto Triplo",
+      "Estúdio",
+      "Apartamento Dúplex"
+    ];
+
     const PAISES = [
       "Espanha", "Alemanha", "França", "Reino Unido", "Itália", "Holanda", "Brasil", "Estados Unidos",
       "Afeganistão", "África do Sul", "Albânia", "Andorra", "Angola", "Antígua e Barbuda", "Arábia Saudita", 
@@ -49,7 +57,6 @@
       const [loading, setLoading] = useState(false);
       const [exporting, setExporting] = useState(false);
 
-      // Estado do formulário de check-in
       const [novoBoletim, setNovoBoletim] = useState({
         nome: '',
         dataNascimento: '',
@@ -60,10 +67,10 @@
         paisResidencia: 'Espanha',
         dataEntrada: new Date().toISOString().slice(0, 10),
         dataSaida: '',
-        quarto: 'Quarto Duplo com Vista Mar'
+        tipoAlojamento: 'Quarto Duplo com Vista Mar',
+        numeroUnidade: '1'
       });
 
-      // Estado do filtro de exportação .CSV
       const todayStr = new Date().toISOString().slice(0, 10);
       const [exportDataInicio, setExportDataInicio] = useState(todayStr);
       const [exportDataFim, setExportDataFim] = useState(todayStr);
@@ -71,7 +78,7 @@
       const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (!novoBoletim.nome || !novoBoletim.docNumero || !novoBoletim.dataEntrada || !novoBoletim.dataSaida) {
+        if (!novoBoletim.nome || !novoBoletim.docNumero || !novoBoletim.dataEntrada || !novoBoletim.dataSaida || !novoBoletim.numeroUnidade) {
           alert('Por favor, preencha todos os campos obrigatórios (*).');
           return;
         }
@@ -98,7 +105,8 @@
             paisResidencia: 'Espanha',
             dataEntrada: new Date().toISOString().slice(0, 10),
             dataSaida: '',
-            quarto: novoBoletim.quarto
+            tipoAlojamento: novoBoletim.tipoAlojamento,
+            numeroUnidade: novoBoletim.numeroUnidade
           });
         } catch (error) {
           alert('❌ Erro ao ligar ao servidor. Verifique a ligação à internet.');
@@ -107,7 +115,6 @@
         }
       };
 
-      // Função para gerar e descarregar o ficheiro .CSV por filtro de datas
       const handleExportCSV = async (e) => {
         e.preventDefault();
         setExporting(true);
@@ -134,16 +141,14 @@
               return;
             }
 
-            // Construir o conteúdo .CSV
             let csvContent = "data:text/csv;charset=utf-8,";
-            csvContent += "Nome_Completo,Data_Nascimento,Nacionalidade,Tipo_Documento,Numero_Documento,Pais_Emissor,Pais_Residencia,Check_In,Check_Out,Quarto\n";
+            csvContent += "Nome_Completo,Data_Nascimento,Nacionalidade,Tipo_Documento,Numero_Documento,Pais_Emissor,Pais_Residencia,Check_In,Check_Out,Tipo_Alojamento,Numero_Unidade\n";
 
             list.forEach(h => {
-              const row = `"${h.nome}","${h.dataNascimento}","${h.nacionalidade}","${h.docTipo}","${h.docNumero}","${h.docPais}","${h.paisResidencia}","${h.dataEntrada}","${h.dataSaida}","${h.quarto}"`;
+              const row = `"${h.nome}","${h.dataNascimento}","${h.nacionalidade}","${h.docTipo}","${h.docNumero}","${h.docPais}","${h.paisResidencia}","${h.dataEntrada}","${h.dataSaida}","${h.tipoAlojamento}","${h.numeroUnidade}"`;
               csvContent += row + "\n";
             });
 
-            // Descarregar automaticamente para o computador
             const encodedUri = encodeURI(csvContent);
             const link = document.createElement("a");
             link.setAttribute("href", encodedUri);
@@ -179,7 +184,7 @@
 
           <main className="max-w-3xl mx-auto p-4 mt-4 space-y-6">
             
-            {/* NOVO PAINEL DE EXPORTAÇÃO .CSV POR SELEÇÃO DE DATAS */}
+            {/* PAINEL DE EXPORTAÇÃO .CSV */}
             <div className="bg-amber-50 p-5 rounded-xl border border-amber-200 shadow-sm space-y-3">
               <div className="flex items-center justify-between border-b border-amber-200 pb-2">
                 <h2 className="text-sm font-bold text-amber-900 flex items-center gap-2">
@@ -221,7 +226,7 @@
               </form>
             </div>
 
-            {/* FORMULÁRIO DE REGISTO DE HÓSPEDE */}
+            {/* FORMULÁRIO DE REGISTO */}
             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
               <div className="border-b pb-3">
                 <h2 className="text-lg font-bold text-slate-800">📋 Novo Boletim de Alojamento</h2>
@@ -276,18 +281,25 @@
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Quarto Atribuído *</label>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Tipo de Alojamento *</label>
                       <select 
-                        value={novoBoletim.quarto} 
-                        onChange={e => setNovoBoletim({...novoBoletim, quarto: e.target.value})} 
-                        className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                        value={novoBoletim.tipoAlojamento} 
+                        onChange={e => setNovoBoletim({...novoBoletim, tipoAlojamento: e.target.value})} 
+                        className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
                       >
-                        <option value="Quarto Individual">Quarto Individual</option>
-                        <option value="Quarto Duplo com Vista Mar">Quarto Duplo com Vista Mar</option>
-                        <option value="Quarto Triplo">Quarto Triplo</option>
-                        <option value="Estúdio com Kitchenette">Estúdio com Kitchenette</option>
-                        <option value="Apartamento Duplex">Apartamento Duplex</option>
+                        {TIPOS_ALOJAMENTO.map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Número do Alojamento / Unidade *</label>
+                      <input 
+                        type="text" 
+                        placeholder="Ex: N.º 1, 102, R/C" 
+                        value={novoBoletim.numeroUnidade} 
+                        onChange={e => setNovoBoletim({...novoBoletim, numeroUnidade: e.target.value})} 
+                        className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none font-medium" 
+                        required 
+                      />
                     </div>
                   </div>
                 </div>
