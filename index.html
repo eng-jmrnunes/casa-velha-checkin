@@ -18,7 +18,6 @@
     // ⚠️ COLE AQUI O SEU LINK DO GOOGLE APPS SCRIPT
     const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzZitsCHoHUdgDwb2g8OrJEUm6tkXob-XhiywGuRt2ZAIPH9pwTWVvXGc2hQzA4psfbTg/exec";
 
-    // Tipos de Alojamento Exatos da Casa Velha
     const TIPOS_ALOJAMENTO = [
       "Quarto Duplo com Vista Mar",
       "Quarto Triplo",
@@ -56,6 +55,14 @@
     function CheckInAIMA() {
       const [loading, setLoading] = useState(false);
       const [exporting, setExporting] = useState(false);
+      
+      // Estado para pesquisa e alteração de check-out
+      const [searchQuery, setSearchQuery] = useState('');
+      const [searchResults, setSearchResults] = useState([]);
+      const [searching, setSearching] = useState(false);
+      const [editingRegisto, setEditingRegisto] = useState(null);
+      const [novaDataSaida, setNovaDataSaida] = useState('');
+      const [updating, setUpdating] = useState(false);
 
       const [novoBoletim, setNovoBoletim] = useState({
         nome: '',
@@ -75,25 +82,36 @@
       const [exportDataInicio, setExportDataInicio] = useState(todayStr);
       const [exportDataFim, setExportDataFim] = useState(todayStr);
 
+      // Função para gerar um ID Único de Boletim
+      const gerarIDBoletim = () => {
+        const d = new Date();
+        const datePart = d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
+        const randomPart = Math.floor(1000 + Math.random() * 9000);
+        return `CV-${datePart}-${randomPart}`;
+      };
+
       const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (!novoBoletim.nome || !novoBoletim.docNumero || !novoBoletim.dataEntrada || !novoBoletim.dataSaida || !novoBoletim.numeroUnidade) {
-          alert('Por favor, preencha todos os campos obrigatórios (*).');
+        if (novoBoletim.dataSaida <= novoBoletim.dataEntrada) {
+          alert('A data de check-out prevista deve ser posterior à data de check-in.');
           return;
         }
 
         setLoading(true);
+
+        const idBoletim = gerarIDBoletim();
+        const payload = { ...novoBoletim, idBoletim };
 
         try {
           await fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
             mode: 'no-cors',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(novoBoletim)
+            body: JSON.stringify(payload)
           });
 
-          alert('✅ Boletim registado com sucesso no sistema!');
+          alert(`✅ Boletim registado com sucesso!\n\nID do Boletim: ${idBoletim}`);
 
           setNovoBoletim({
             nome: '',
@@ -112,6 +130,71 @@
           alert('❌ Erro ao ligar ao servidor. Verifique a ligação à internet.');
         } finally {
           setLoading(false);
+        }
+      };
+
+      // Pesquisar hóspedes gravados
+      const handleSearch = async (e) => {
+        e.preventDefault();
+        if (!searchQuery.trim()) return;
+
+        setSearching(true);
+        setEditingRegisto(null);
+
+        try {
+          const response = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action: "SEARCH_GUEST", query: searchQuery })
+          });
+          const result = await response.json();
+
+          if (result.status === "success") {
+            setSearchResults(result.data || []);
+            if (!result.data || result.data.length === 0) {
+              alert('Nenhum registo encontrado com o termo pesquisado.');
+            }
+          }
+        } catch (error) {
+          alert('Erro ao realizar a pesquisa.');
+        } finally {
+          setSearching(false);
+        }
+      };
+
+      // Guardar alteração da data de check-out
+      const handleUpdateCheckout = async () => {
+        if (!novaDataSaida || novaDataSaida <= editingRegisto.dataEntrada) {
+          alert('A nova data de saída deve ser posterior à data de check-in.');
+          return;
+        }
+
+        setUpdating(true);
+
+        try {
+          const response = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({
+              action: "UPDATE_CHECKOUT",
+              rowIndex: editingRegisto.rowIndex,
+              newCheckout: novaDataSaida
+            })
+          });
+          const result = await response.json();
+
+          if (result.status === "success") {
+            alert(`✅ Data de Check-out atualizada com sucesso para ${novaDataSaida}!`);
+            setEditingRegisto(null);
+            setSearchResults([]);
+            setSearchQuery('');
+          } else {
+            alert('Erro ao atualizar: ' + result.message);
+          }
+        } catch (error) {
+          alert('Erro ao ligar ao servidor.');
+        } finally {
+          setUpdating(false);
         }
       };
 
@@ -142,10 +225,10 @@
             }
 
             let csvContent = "data:text/csv;charset=utf-8,";
-            csvContent += "Nome_Completo,Data_Nascimento,Nacionalidade,Tipo_Documento,Numero_Documento,Pais_Emissor,Pais_Residencia,Check_In,Check_Out,Tipo_Alojamento,Numero_Unidade\n";
+            csvContent += "ID_Boletim,Nome_Completo,Data_Nascimento,Nacionalidade,Tipo_Documento,Numero_Documento,Pais_Emissor,Pais_Residencia,Check_In,Check_Out_Previsto,Tipo_Alojamento,Numero_Unidade\n";
 
             list.forEach(h => {
-              const row = `"${h.nome}","${h.dataNascimento}","${h.nacionalidade}","${h.docTipo}","${h.docNumero}","${h.docPais}","${h.paisResidencia}","${h.dataEntrada}","${h.dataSaida}","${h.tipoAlojamento}","${h.numeroUnidade}"`;
+              const row = `"${h.idBoletim}","${h.nome}","${h.dataNascimento}","${h.nacionalidade}","${h.docTipo}","${h.docNumero}","${h.docPais}","${h.paisResidencia}","${h.dataEntrada}","${h.dataSaida}","${h.tipoAlojamento}","${h.numeroUnidade}"`;
               csvContent += row + "\n";
             });
 
@@ -171,29 +254,94 @@
       return (
         <div className="min-h-screen pb-12">
           <header className="bg-slate-900 text-white p-4 shadow-md">
-            <div className="max-w-3xl mx-auto flex justify-between items-center">
-              <div>
-                <h1 className="text-xl font-bold">🏠 Casa Velha - Terminal de Check-in</h1>
-                <p className="text-xs text-slate-400">Registo Oficial de Boletins de Alojamento (AIMA / SIBA)</p>
-              </div>
-              <span className="bg-emerald-600 text-white text-xs px-3 py-1 rounded-full font-semibold">
-                Google Drive Ativo
-              </span>
+            <div className="max-w-3xl mx-auto">
+              <h1 className="text-xl font-bold">🏠 Casa Velha - Terminal de Check-in</h1>
+              <p className="text-xs text-slate-400">Registo Oficial de Boletins de Alojamento (AIMA / SIBA)</p>
             </div>
           </header>
 
           <main className="max-w-3xl mx-auto p-4 mt-4 space-y-6">
             
-            {/* PAINEL DE EXPORTAÇÃO .CSV */}
+            {/* PAINEL 1: PESQUISAR E ALTERAR CHECK-OUT PREVISTO */}
+            <div className="bg-blue-50 p-5 rounded-xl border border-blue-200 shadow-sm space-y-3">
+              <h2 className="text-sm font-bold text-blue-900">🔍 Pesquisar Hóspede / Alterar Data de Check-out</h2>
+              <p className="text-xs text-blue-700">Utilize esta secção se o hóspede prolongar a estadia ou precisar de alterar a data de saída prevista.</p>
+
+              <form onSubmit={handleSearch} className="flex gap-2 text-xs">
+                <input 
+                  type="text" 
+                  placeholder="Pesquisar por N.º de Documento, Nome ou ID do Boletim..." 
+                  value={searchQuery} 
+                  onChange={e => setSearchQuery(e.target.value)} 
+                  className="flex-1 border border-blue-300 p-2.5 rounded bg-white font-medium outline-none focus:ring-2 focus:ring-blue-500" 
+                  required 
+                />
+                <button 
+                  type="submit" 
+                  disabled={searching}
+                  className="bg-blue-700 hover:bg-blue-800 text-white font-bold px-4 rounded transition text-xs disabled:bg-slate-400"
+                >
+                  {searching ? 'A Pesquisar...' : 'Procurar'}
+                </button>
+              </form>
+
+              {/* Resultados da Pesquisa */}
+              {searchResults.length > 0 && (
+                <div className="mt-3 bg-white rounded border border-blue-200 divide-y text-xs">
+                  {searchResults.map(r => (
+                    <div key={r.rowIndex} className="p-3 flex justify-between items-center">
+                      <div>
+                        <div className="font-bold text-slate-900">{r.nome} <span className="text-blue-600 font-mono">({r.idBoletim})</span></div>
+                        <div className="text-slate-500">{r.docTipo}: {r.docNumero} | {r.tipoAlojamento} (Unidade {r.numeroUnidade})</div>
+                        <div className="text-slate-700 font-medium">Entrada: {r.dataEntrada} $\rightarrow$ Saída Atual: <span className="text-amber-700 font-bold">{r.dataSaida}</span></div>
+                      </div>
+                      <button 
+                        onClick={() => { setEditingRegisto(r); setNovaDataSaida(r.dataSaida); }} 
+                        className="bg-amber-600 hover:bg-amber-700 text-white font-semibold px-3 py-1.5 rounded"
+                      >
+                        Alterar Check-out
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Formulário de Alteração da Data de Saída */}
+              {editingRegisto && (
+                <div className="mt-3 p-4 bg-amber-100 rounded border border-amber-300 text-xs space-y-2">
+                  <div className="font-bold text-amber-900">Alterar Saída Prevista para: {editingRegisto.nome}</div>
+                  <div className="flex items-center gap-3">
+                    <div>
+                      <label className="block font-semibold text-amber-900 mb-1">Nova Data de Check-out Prevista:</label>
+                      <input 
+                        type="date" 
+                        value={novaDataSaida} 
+                        onChange={e => setNovaDataSaida(e.target.value)} 
+                        className="border border-amber-400 p-2 rounded bg-white font-bold" 
+                        required 
+                      />
+                    </div>
+                    <button 
+                      onClick={handleUpdateCheckout} 
+                      disabled={updating}
+                      className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-4 py-2 rounded self-end disabled:bg-slate-400"
+                    >
+                      {updating ? 'A Guardar...' : '💾 Confirmar Nova Data'}
+                    </button>
+                    <button 
+                      onClick={() => setEditingRegisto(null)} 
+                      className="text-slate-600 hover:underline self-end py-2"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* PAINEL 2: EXPORTAÇÃO .CSV */}
             <div className="bg-amber-50 p-5 rounded-xl border border-amber-200 shadow-sm space-y-3">
-              <div className="flex items-center justify-between border-b border-amber-200 pb-2">
-                <h2 className="text-sm font-bold text-amber-900 flex items-center gap-2">
-                  📥 Gerar & Descarregar Ficheiro .CSV para a AIMA
-                </h2>
-                <span className="text-xs bg-amber-200 text-amber-900 font-semibold px-2 py-0.5 rounded">
-                  Filtro por Datas
-                </span>
-              </div>
+              <h2 className="text-sm font-bold text-amber-900">📥 Gerar & Descarregar Ficheiro .CSV para a AIMA</h2>
               
               <form onSubmit={handleExportCSV} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end text-xs">
                 <div>
@@ -226,7 +374,7 @@
               </form>
             </div>
 
-            {/* FORMULÁRIO DE REGISTO */}
+            {/* PAINEL 3: NOVO FORMULÁRIO DE CHECK-IN */}
             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
               <div className="border-b pb-3">
                 <h2 className="text-lg font-bold text-slate-800">📋 Novo Boletim de Alojamento</h2>
@@ -376,7 +524,7 @@
                   disabled={loading}
                   className="w-full bg-blue-700 text-white font-bold py-3.5 rounded-lg hover:bg-blue-800 transition shadow text-base disabled:bg-slate-400"
                 >
-                  {loading ? 'A Enviar para o Google Drive...' : '💾 Confirmar e Enviar Check-in'}
+                  {loading ? 'A Enviar...' : '💾 Confirmar e Enviar Check-in'}
                 </button>
               </form>
             </div>
