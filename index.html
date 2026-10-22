@@ -13,7 +13,7 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState } = React;
+    const { useState, useEffect } = React;
 
     // ⚠️ COLE AQUI O SEU LINK DO GOOGLE APPS SCRIPT
     const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzZitsCHoHUdgDwb2g8OrJEUm6tkXob-XhiywGuRt2ZAIPH9pwTWVvXGc2hQzA4psfbTg/exec";
@@ -63,6 +63,8 @@
       const [novaDataSaida, setNovaDataSaida] = useState('');
       const [updating, setUpdating] = useState(false);
 
+      const [idadeCalculada, setIdadeCalculada] = useState(null);
+
       const [novoBoletim, setNovoBoletim] = useState({
         nome: '',
         dataNascimento: '',
@@ -74,12 +76,52 @@
         dataEntrada: new Date().toISOString().slice(0, 10),
         dataSaida: '',
         tipoAlojamento: 'Quarto Duplo com Vista Mar',
-        numeroUnidade: '1'
+        numeroUnidade: '1',
+        eMenor: 'Não',
+        titularDoc: 'Próprio',
+        qualidadeAcompanhante: 'N/A'
       });
 
       const todayStr = new Date().toISOString().slice(0, 10);
       const [exportDataInicio, setExportDataInicio] = useState(todayStr);
       const [exportDataFim, setExportDataFim] = useState(todayStr);
+
+      // Efeito para calcular a idade e detetar menoridade automaticamente
+      useEffect(() => {
+        if (!novoBoletim.dataNascimento) {
+          setIdadeCalculada(null);
+          setNovoBoletim(prev => ({ ...prev, eMenor: 'Não', titularDoc: 'Próprio', qualidadeAcompanhante: 'N/A' }));
+          return;
+        }
+
+        const nascimento = new Date(novoBoletim.dataNascimento);
+        const hoje = new Date(novoBoletim.dataEntrada || todayStr);
+        
+        let idade = hoje.getFullYear() - nascimento.getFullYear();
+        const m = hoje.getMonth() - nascimento.getMonth();
+        if (m < 0 || (m === 0 && hoje.getDate() < nascimento.getDate())) {
+          idade--;
+        }
+
+        if (!isNaN(idade)) {
+          setIdadeCalculada(idade);
+          if (idade < 18) {
+            setNovoBoletim(prev => ({
+              ...prev,
+              eMenor: 'Sim',
+              titularDoc: prev.titularDoc === 'Próprio' ? 'Documento do Acompanhante' : prev.titularDoc,
+              qualidadeAcompanhante: prev.qualidadeAcompanhante === 'N/A' ? 'Pai / Mãe' : prev.qualidadeAcompanhante
+            }));
+          } else {
+            setNovoBoletim(prev => ({
+              ...prev,
+              eMenor: 'Não',
+              titularDoc: 'Próprio',
+              qualidadeAcompanhante: 'N/A'
+            }));
+          }
+        }
+      }, [novoBoletim.dataNascimento, novoBoletim.dataEntrada]);
 
       const formatarDataLimpa = (dStr) => {
         if (!dStr) return '';
@@ -127,8 +169,12 @@
             dataEntrada: new Date().toISOString().slice(0, 10),
             dataSaida: '',
             tipoAlojamento: novoBoletim.tipoAlojamento,
-            numeroUnidade: novoBoletim.numeroUnidade
+            numeroUnidade: novoBoletim.numeroUnidade,
+            eMenor: 'Não',
+            titularDoc: 'Próprio',
+            qualidadeAcompanhante: 'N/A'
           });
+          setIdadeCalculada(null);
         } catch (error) {
           alert('❌ Erro ao ligar ao servidor. Verifique a ligação à internet.');
         } finally {
@@ -226,10 +272,10 @@
             }
 
             let csvContent = "data:text/csv;charset=utf-8,";
-            csvContent += "ID_Boletim,Nome_Completo,Data_Nascimento,Nacionalidade,Tipo_Documento,Numero_Documento,Pais_Emissor,Pais_Residencia,Check_In,Check_Out_Previsto,Tipo_Alojamento,Numero_Unidade\n";
+            csvContent += "ID_Boletim,Nome_Completo,Data_Nascimento,Nacionalidade,Tipo_Documento,Numero_Documento,Pais_Emissor,Pais_Residencia,Check_In,Check_Out_Previsto,Tipo_Alojamento,Numero_Unidade,E_Menor,Titular_Documento,Qualidade_Acompanhante\n";
 
             list.forEach(h => {
-              const row = `"${h.idBoletim}","${h.nome}","${h.dataNascimento}","${h.nacionalidade}","${h.docTipo}","${h.docNumero}","${h.docPais}","${h.paisResidencia}","${h.dataEntrada}","${h.dataSaida}","${h.tipoAlojamento}","${h.numeroUnidade}"`;
+              const row = `"${h.idBoletim}","${h.nome}","${h.dataNascimento}","${h.nacionalidade}","${h.docTipo}","${h.docNumero}","${h.docPais}","${h.paisResidencia}","${h.dataEntrada}","${h.dataSaida}","${h.tipoAlojamento}","${h.numeroUnidade}","${h.eMenor}","${h.titularDoc}","${h.qualidadeAcompanhante}"`;
               csvContent += row + "\n";
             });
 
@@ -286,7 +332,6 @@
                 </button>
               </form>
 
-              {/* Resultados da Pesquisa */}
               {searchResults.length > 0 && (
                 <div className="mt-3 bg-white rounded border border-blue-200 divide-y text-xs">
                   {searchResults.map(r => (
@@ -307,7 +352,6 @@
                 </div>
               )}
 
-              {/* Formulário de Alteração da Data de Saída */}
               {editingRegisto && (
                 <div className="mt-3 p-4 bg-amber-100 rounded border border-amber-300 text-xs space-y-2">
                   <div className="font-bold text-amber-900">Alterar Saída Prevista para: {editingRegisto.nome}</div>
@@ -400,7 +444,14 @@
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Data de Nascimento *</label>
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="block text-xs font-semibold text-slate-700">Data de Nascimento *</label>
+                        {idadeCalculada !== null && (
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${idadeCalculada < 18 ? 'bg-purple-200 text-purple-900' : 'bg-slate-200 text-slate-700'}`}>
+                            {idadeCalculada} {idadeCalculada === 1 ? 'ano' : 'anos'} ({idadeCalculada < 18 ? 'Menor' : 'Adulto'})
+                          </span>
+                        )}
+                      </div>
                       <input 
                         type="date" 
                         value={novoBoletim.dataNascimento} 
@@ -453,9 +504,52 @@
                   </div>
                 </div>
 
+                {/* PAINEL AUTOMÁTICO DE MENOR DE IDADE */}
+                {novoBoletim.eMenor === 'Sim' && (
+                  <div className="bg-purple-50 p-4 rounded-lg border border-purple-200 space-y-3 transition-all">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-bold text-purple-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                        👶 Hóspede Detetado como Menor de Idade ({idadeCalculada} anos)
+                      </h3>
+                      <span className="text-[11px] font-bold bg-purple-200 text-purple-900 px-2 py-0.5 rounded">
+                        Requisito AIMA
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-purple-200 text-xs">
+                      <div>
+                        <label className="block font-semibold text-purple-900 mb-1">Titular do Documento Apresentado *</label>
+                        <select 
+                          value={novoBoletim.titularDoc} 
+                          onChange={e => setNovoBoletim({...novoBoletim, titularDoc: e.target.value})} 
+                          className="w-full border border-purple-300 p-2.5 rounded bg-white font-medium"
+                        >
+                          <option value="Documento do Acompanhante">Documento do Acompanhante / Responsável</option>
+                          <option value="Documento Próprio do Menor">Documento Próprio do Menor</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-purple-900 mb-1">Qualidade do Acompanhante *</label>
+                        <select 
+                          value={novoBoletim.qualidadeAcompanhante} 
+                          onChange={e => setNovoBoletim({...novoBoletim, qualidadeAcompanhante: e.target.value})} 
+                          className="w-full border border-purple-300 p-2.5 rounded bg-white font-medium"
+                        >
+                          <option value="Pai / Mãe">Pai / Mãe</option>
+                          <option value="Tutor Legal">Tutor Legal</option>
+                          <option value="Outro Familiar">Outro Familiar</option>
+                          <option value="Acompanhante Autorizado">Acompanhante Autorizado</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* 2. Documento */}
                 <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
-                  <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">2. Documento de Identificação</h3>
+                  <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">
+                    2. Documento de Identificação {novoBoletim.eMenor === 'Sim' && novoBoletim.titularDoc === 'Documento do Acompanhante' && '(do Acompanhante Responsável)'}
+                  </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">Tipo de Documento *</label>
