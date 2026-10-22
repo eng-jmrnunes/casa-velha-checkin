@@ -103,6 +103,8 @@
       const [nasceMes, setNasceMes] = useState('01');
       const [nasceDia, setNasceDia] = useState('01');
 
+      const todayStr = new Date().toISOString().slice(0, 10);
+
       const [novoBoletim, setNovoBoletim] = useState({
         nome: '',
         dataNascimento: '',
@@ -111,7 +113,7 @@
         docNumero: '',
         docPais: 'Portugal',
         paisResidencia: 'Portugal',
-        dataEntrada: new Date().toISOString().slice(0, 10),
+        dataEntrada: todayStr,
         dataSaida: '',
         tipoAlojamento: 'Quarto Duplo com Vista Mar',
         numeroUnidade: '1',
@@ -119,11 +121,10 @@
         titularDoc: 'Próprio',
         qualidadeAcompanhante: 'N/A',
         valorReserva: '',
-        taxaTuristica: '',
+        taxaTuristica: '0.00',
         modoPagamento: 'Numerário'
       });
 
-      const todayStr = new Date().toISOString().slice(0, 10);
       const [exportDataInicio, setExportDataInicio] = useState(todayStr);
       const [exportDataFim, setExportDataFim] = useState(todayStr);
 
@@ -143,13 +144,13 @@
         setNumeroNoites(calcularDiferencaNoites(novoBoletim.dataEntrada, novoBoletim.dataSaida));
       }, [novoBoletim.dataEntrada, novoBoletim.dataSaida]);
 
-      // Regra de Cálculo da Taxa Turística de Matosinhos (2€/noite até max 7 noites = max 14€; Isenção < 16 anos)
+      // Cálculo e Regras da Taxa Turística de Matosinhos
       const noitesTributaveis = Math.min(numeroNoites, 7);
       const taxaSugeridaMatosinhos = (idadeCalculada !== null && idadeCalculada < 16) 
         ? 0 
         : (noitesTributaveis * 2);
 
-      const valorTaxaNum = Number(novoBoletim.taxaTuristica);
+      const valorTaxaNum = Number(novoBoletim.taxaTuristica || 0);
       const menorComTaxaIncorreta = idadeCalculada !== null && idadeCalculada < 16 && valorTaxaNum > 0;
       const taxaExcedeLimiteMaximo = valorTaxaNum > 14;
 
@@ -173,7 +174,7 @@
 
       // Deteção Automática de Hóspede Recorrente por Documento
       useEffect(() => {
-        const docLimpo = novoBoletim.docNumero.trim();
+        const docLimpo = (novoBoletim.docNumero || '').trim();
         if (docLimpo.length < 4) {
           setAlertaRecorrente(null);
           return;
@@ -241,6 +242,7 @@
         }
       };
 
+      // Recálculo imediato de idade e atualização do valor sugerido da taxa
       useEffect(() => {
         if (!novoBoletim.dataNascimento) {
           setIdadeCalculada(null);
@@ -260,28 +262,16 @@
         if (!isNaN(idade)) {
           setIdadeCalculada(idade);
 
-          // Ajusta a sugestão da taxa se for menor de 16 anos
-          if (idade < 16 && (novoBoletim.taxaTuristica === '' || novoBoletim.taxaTuristica === '0')) {
-            setNovoBoletim(prev => ({ ...prev, taxaTuristica: '0.00' }));
-          }
-
-          if (idade < 18) {
-            setNovoBoletim(prev => ({
-              ...prev,
-              eMenor: 'Sim',
-              titularDoc: prev.titularDoc === 'Próprio' ? 'Documento do Acompanhante' : prev.titularDoc,
-              qualidadeAcompanhante: prev.qualidadeAcompanhante === 'N/A' ? 'Pai / Mãe' : prev.qualidadeAcompanhante
-            }));
-          } else {
-            setNovoBoletim(prev => ({
-              ...prev,
-              eMenor: 'Não',
-              titularDoc: 'Próprio',
-              qualidadeAcompanhante: 'N/A'
-            }));
-          }
+          const valorSugerido = idade < 16 ? '0.00' : (Math.min(numeroNoites, 7) * 2).toFixed(2);
+          setNovoBoletim(prev => ({ 
+            ...prev, 
+            taxaTuristica: valorSugerido,
+            eMenor: idade < 18 ? 'Sim' : 'Não',
+            titularDoc: idade < 18 ? (prev.titularDoc === 'Próprio' ? 'Documento do Acompanhante' : prev.titularDoc) : 'Próprio',
+            qualidadeAcompanhante: idade < 18 ? (prev.qualidadeAcompanhante === 'N/A' ? 'Pai / Mãe' : prev.qualidadeAcompanhante) : 'N/A'
+          }));
         }
-      }, [novoBoletim.dataNascimento, novoBoletim.dataEntrada]);
+      }, [novoBoletim.dataNascimento, novoBoletim.dataEntrada, numeroNoites]);
 
       const formatarDataLimpa = (dStr) => {
         if (!dStr) return '';
@@ -311,7 +301,7 @@
           return;
         }
 
-        if (novoBoletim.dataSaida <= novoBoletim.dataEntrada) {
+        if (!novoBoletim.dataSaida || novoBoletim.dataSaida <= novoBoletim.dataEntrada) {
           alert('A data de check-out prevista deve ser posterior à data de check-in.');
           return;
         }
@@ -350,7 +340,7 @@
             docNumero: '',
             docPais: 'Portugal',
             paisResidencia: 'Portugal',
-            dataEntrada: new Date().toISOString().slice(0, 10),
+            dataEntrada: todayStr,
             dataSaida: '',
             tipoAlojamento: novoBoletim.tipoAlojamento,
             numeroUnidade: novoBoletim.numeroUnidade,
@@ -358,7 +348,7 @@
             titularDoc: 'Próprio',
             qualidadeAcompanhante: 'N/A',
             valorReserva: '',
-            taxaTuristica: '',
+            taxaTuristica: '0.00',
             modoPagamento: 'Numerário'
           });
           setNasceAno('');
@@ -539,7 +529,7 @@
 
       return (
         <div className="min-h-screen pb-12">
-          {/* CABEÇALHO PRINCIPAL COM LOGIN INTEGRADO NO TOPO DIREITO */}
+          {/* CABEÇALHO PRINCIPAL */}
           <header className="bg-slate-900 text-white p-4 shadow-md">
             <div className="max-w-4xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <div>
@@ -555,7 +545,7 @@
                 <p className="text-xs text-slate-400">Terminal de Check-in (RNAL 166503/AL)</p>
               </div>
 
-              {/* LOGIN DO FUNCIONÁRIO NO CANTO SUPERIOR DIREITO */}
+              {/* LOGIN DO FUNCIONÁRIO */}
               <div className="bg-slate-800 p-2.5 rounded-lg border border-slate-700 flex items-center gap-2 text-xs w-full md:w-auto">
                 <span className="text-slate-400 font-semibold hidden sm:inline">👤 Receção:</span>
                 
@@ -604,10 +594,9 @@
             </div>
           </header>
 
-          {/* LAYOUT ALARGADO (max-w-4xl) */}
           <main className="max-w-4xl mx-auto p-4 mt-4 space-y-6">
 
-            {/* PAINEL 1: PESQUISAR E ALTERAR CHECK-OUT PREVISTO / IMPRIMIR 2ª VIA */}
+            {/* PAINEL 1: PESQUISAR E ALTERAR CHECK-OUT PREVISTO */}
             <div className="bg-blue-50 p-5 rounded-xl border border-blue-200 shadow-sm space-y-3">
               <h2 className="text-sm font-bold text-blue-900">🔍 Pesquisar Hóspede / Alterar Check-out / 2ª Via</h2>
               <p className="text-xs text-blue-700">Utilize esta secção para pesquisar registos anteriores, emitir segundas vias do boletim ou alterar a data de saída prevista.</p>
@@ -643,7 +632,6 @@
                         <button 
                           onClick={() => handlePrintFromSearch(r)} 
                           className="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-3 py-1.5 rounded flex items-center gap-1"
-                          title="Imprimir 2ª Via do Boletim"
                         >
                           🖨️ 2ª Via
                         </button>
@@ -749,16 +737,13 @@
 
                   {/* BANNER DE BOAS-VINDAS A HÓSPEDE RECORRENTE */}
                   {alertaRecorrente && (
-                    <div className="p-4 bg-emerald-100 border border-emerald-300 rounded-xl text-emerald-900 text-xs shadow-sm flex items-start justify-between gap-3 animate-fade-in">
+                    <div className="p-4 bg-emerald-100 border border-emerald-300 rounded-xl text-emerald-900 text-xs shadow-sm flex items-start justify-between gap-3">
                       <div className="space-y-1">
                         <div className="font-bold text-sm flex items-center gap-2">
                           🌟 Hóspede Recorrente Detetado!
                         </div>
                         <p>
                           Bem-vindo de novo a Casa Velha, <strong>{alertaRecorrente.nome}</strong>! Esta é a sua <strong>{alertaRecorrente.estadias + 1}ª estadia</strong> connosco (última entrada em {formatarDataLimpa(alertaRecorrente.ultimaEntrada)}).
-                        </p>
-                        <p className="text-[11px] text-emerald-800 italic">
-                          Os dados pessoais foram preenchidos automaticamente. Por favor, valide os campos abaixo antes de confirmar o check-in.
                         </p>
                       </div>
                       <button 
@@ -777,7 +762,7 @@
                     <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
                       <div className="flex justify-between items-center">
                         <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">
-                          1. Documento de Identificação {novoBoletim.eMenor === 'Sim' && novoBoletim.titularDoc === 'Documento do Acompanhante' && '(do Acompanhante Responsável)'}
+                          1. Documento de Identificação
                         </h3>
                         {verificandoDoc && (
                           <span className="text-[11px] text-blue-600 font-semibold animate-pulse">
@@ -935,9 +920,9 @@
                       </div>
                     </div>
 
-                    {/* PAINEL AUTOMÁTICO DE MENOR DE IDADE */}
+                    {/* PAINEL DE MENOR DE IDADE */}
                     {novoBoletim.eMenor === 'Sim' && (
-                      <div className="bg-purple-50 p-4 rounded-lg border border-purple-200 space-y-3 transition-all">
+                      <div className="bg-purple-50 p-4 rounded-lg border border-purple-200 space-y-3">
                         <div className="flex items-center justify-between">
                           <h3 className="font-bold text-purple-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
                             👶 Hóspede Detetado como Menor de Idade ({idadeCalculada} anos)
@@ -1007,7 +992,7 @@
                         </div>
                       </div>
 
-                      {/* JANELA / ALERTA DE CÁLCULO DA TAXA TURÍSTICA DE MATOSINHOS */}
+                      {/* PAINEL E AVISO DA TAXA TURÍSTICA DE MATOSINHOS */}
                       <div className={`p-3.5 rounded-lg border text-xs space-y-2 transition-all ${
                         taxaComAvisoErro 
                           ? 'bg-rose-50 border-rose-400 text-rose-900 ring-2 ring-rose-500/30' 
@@ -1138,7 +1123,7 @@
             </div>
           </main>
 
-          {/* MODAL: SOBRE O ESTABELECIMENTO (RNAL) */}
+          {/* MODAL: SOBRE O ESTABELECIMENTO */}
           {showSobreModal && (
             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
               <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200">
@@ -1189,7 +1174,6 @@
             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
               <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-slate-200">
                 
-                {/* ÁREA IMPRESSA (PDF) */}
                 <div id="printable-boletim" className="space-y-4 text-xs font-sans text-slate-800 p-2">
                   <div className="text-center border-b pb-3">
                     <h2 className="text-base font-bold text-slate-900">🏠 Casa Velha - Comprovativo de Check-in</h2>
@@ -1231,7 +1215,6 @@
                     </div>
                   </div>
 
-                  {/* INFORMAÇÃO DE PAGAMENTO NA IMPRESSÃO */}
                   <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200 space-y-1.5 font-medium text-emerald-900">
                     <div className="font-bold border-b border-emerald-200 pb-1 text-[11px]">💳 Detalhes do Pagamento:</div>
                     <div className="flex justify-between">
@@ -1241,7 +1224,6 @@
                     <div>Modo de Pagamento: <strong>{ultimoSucesso.modoPagamento || 'Numerário'}</strong></div>
                   </div>
 
-                  {/* IDENTIFICAÇÃO APENAS DO ID DO FUNCIONÁRIO NO RODAPÉ */}
                   <div className="pt-2 text-right border-t border-slate-200">
                     <div className="text-[10px] text-slate-500 font-mono">
                       {ultimoSucesso.funcionarioId && ultimoSucesso.funcionarioId !== 'N/A' 
