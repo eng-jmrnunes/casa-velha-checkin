@@ -90,6 +90,10 @@
       const [showSobreModal, setShowSobreModal] = useState(false);
       const [showBoletimForm, setShowBoletimForm] = useState(true);
 
+      // Estado para Deteção de Hóspede Recorrente
+      const [alertaRecorrente, setAlertaRecorrente] = useState(null);
+      const [verificandoDoc, setVerificandoDoc] = useState(false);
+
       // Estado do Operador / Receção
       const [funcionarios, setFuncionarios] = useState([]);
       const [selectedFuncObj, setSelectedFuncObj] = useState({ id: '', nome: '' });
@@ -154,6 +158,68 @@
         })
         .catch(() => {});
       }, []);
+
+      // Deteção Automática de Hóspede Recorrente ao digitar o número de documento
+      useEffect(() => {
+        const docLimpo = novoBoletim.docNumero.trim();
+        if (docLimpo.length < 4) {
+          setAlertaRecorrente(null);
+          return;
+        }
+
+        const timer = setTimeout(async () => {
+          setVerificandoDoc(true);
+          try {
+            const response = await fetch(GOOGLE_SCRIPT_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+              body: JSON.stringify({ action: "SEARCH_GUEST", query: docLimpo })
+            });
+            const result = await response.json();
+
+            if (result.status === "success" && result.data && result.data.length > 0) {
+              const ultimoRegisto = result.data[result.data.length - 1]; // Obtém o registo mais recente
+              const totalEstadias = result.data.length;
+
+              setAlertaRecorrente({
+                nome: ultimoRegisto.nome,
+                estadias: totalEstadias,
+                ultimaEntrada: ultimoRegisto.dataEntrada
+              });
+
+              // Preenchimento Automático do Formulário com dados do último registo
+              setNovoBoletim(prev => ({
+                ...prev,
+                nome: ultimoRegisto.nome || prev.nome,
+                nacionalidade: ultimoRegisto.nacionalidade || prev.nacionalidade,
+                docTipo: ultimoRegisto.docTipo || prev.docTipo,
+                docPais: ultimoRegisto.docPais || prev.docPais,
+                paisResidencia: ultimoRegisto.paisResidencia || prev.paisResidencia
+              }));
+
+              // Se existir data de nascimento válida, ajusta os selectores
+              if (ultimoRegisto.dataNascimento) {
+                const dClean = String(ultimoRegisto.dataNascimento).slice(0, 10);
+                const parts = dClean.split('-');
+                if (parts.length === 3) {
+                  setNasceAno(parts[0]);
+                  setNasceMes(parts[1]);
+                  setNasceDia(parts[2]);
+                  setNovoBoletim(prev => ({ ...prev, dataNascimento: dClean }));
+                }
+              }
+            } else {
+              setAlertaRecorrente(null);
+            }
+          } catch (e) {
+            // Silencioso em caso de erro de rede temporário
+          } finally {
+            setVerificandoDoc(false);
+          }
+        }, 600); // Aguarda 600ms após o utilizador parar de digitar
+
+        return () => clearTimeout(timer);
+      }, [novoBoletim.docNumero]);
 
       const handleSelectNascimento = (ano, mes, dia) => {
         setNasceAno(ano);
@@ -282,6 +348,7 @@
           });
           setNasceAno('');
           setIdadeCalculada(null);
+          setAlertaRecorrente(null);
         } catch (error) {
           alert('❌ Erro ao ligar ao servidor. Verifique a ligação à internet.');
         } finally {
@@ -352,7 +419,6 @@
         }
       };
 
-      // Corrigido: Mapeamento completo dos dados para a 2.ª Via
       const handlePrintFromSearch = (r) => {
         const dEntrada = formatarDataLimpa(r.dataEntrada);
         const dSaida = formatarDataLimpa(r.dataSaida);
@@ -664,12 +730,87 @@
               </div>
 
               {showBoletimForm && (
-                <div className="p-6">
+                <div className="p-6 space-y-4">
+
+                  {/* BANNER DE BOAS-VINDAS A HÓSPEDE RECORRENTE */}
+                  {alertaRecorrente && (
+                    <div className="p-4 bg-emerald-100 border border-emerald-300 rounded-xl text-emerald-900 text-xs shadow-sm flex items-start justify-between gap-3 animate-fade-in">
+                      <div className="space-y-1">
+                        <div className="font-bold text-sm flex items-center gap-2">
+                          🌟 Hóspede Recorrente Detetado!
+                        </div>
+                        <p>
+                          Bem-vindo de novo a Casa Velha, <strong>{alertaRecorrente.nome}</strong>! Esta é a sua <strong>{alertaRecorrente.estadias + 1}ª estadia</strong> connosco (última entrada em {formatarDataLimpa(alertaRecorrente.ultimaEntrada)}).
+                        </p>
+                        <p className="text-[11px] text-emerald-800 italic">
+                          Os dados pessoais foram preenchidos automaticamente. Por favor, valide os campos abaixo antes de confirmar o check-in.
+                        </p>
+                      </div>
+                      <button 
+                        type="button" 
+                        onClick={() => setAlertaRecorrente(null)} 
+                        className="text-emerald-700 font-bold hover:text-emerald-950 text-base"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
+
                   <form onSubmit={handleSubmit} className="space-y-4 text-sm">
                     
-                    {/* 1. Dados Pessoais */}
+                    {/* 2. Documento (COLOCADO EM PRIMEIRO LUGAR DE DADOS PARA PERMITIR AUTOCOMPLETAR) */}
                     <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
-                      <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">1. Dados do Hóspede</h3>
+                      <div className="flex justify-between items-center">
+                        <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">
+                          1. Documento de Identificação {novoBoletim.eMenor === 'Sim' && novoBoletim.titularDoc === 'Documento do Acompanhante' && '(do Acompanhante Responsável)'}
+                        </h3>
+                        {verificandoDoc && (
+                          <span className="text-[11px] text-blue-600 font-semibold animate-pulse">
+                            🔍 A verificar histórico...
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Tipo de Documento *</label>
+                          <select 
+                            value={novoBoletim.docTipo} 
+                            onChange={e => setNovoBoletim({...novoBoletim, docTipo: e.target.value})} 
+                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
+                          >
+                            <option value="Cartão de Cidadão / BI">Cartão de Cidadão / BI</option>
+                            <option value="Passaporte">Passaporte</option>
+                            <option value="Título de Residência">Título de Residência</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Número do Documento *</label>
+                          <input 
+                            type="text" 
+                            placeholder="N.º do Passaporte ou BI" 
+                            value={novoBoletim.docNumero} 
+                            onChange={e => setNovoBoletim({...novoBoletim, docNumero: e.target.value})} 
+                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none font-mono font-bold text-slate-900" 
+                            required 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">País Emissor *</label>
+                          <select 
+                            value={novoBoletim.docPais} 
+                            onChange={e => setNovoBoletim({...novoBoletim, docPais: e.target.value})} 
+                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
+                          >
+                            {PAISES.map(p => <option key={p} value={p}>{p}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 2. Dados Pessoais */}
+                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
+                      <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">2. Dados Pessoais do Hóspede</h3>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         
                         {/* NOME COMPLETO: LARGURA TOTAL ALINHADA */}
@@ -820,48 +961,6 @@
                         </div>
                       </div>
                     )}
-
-                    {/* 2. Documento */}
-                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
-                      <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">
-                        2. Documento de Identificação {novoBoletim.eMenor === 'Sim' && novoBoletim.titularDoc === 'Documento do Acompanhante' && '(do Acompanhante Responsável)'}
-                      </h3>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">Tipo de Documento *</label>
-                          <select 
-                            value={novoBoletim.docTipo} 
-                            onChange={e => setNovoBoletim({...novoBoletim, docTipo: e.target.value})} 
-                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                          >
-                            <option value="Cartão de Cidadão / BI">Cartão de Cidadão / BI</option>
-                            <option value="Passaporte">Passaporte</option>
-                            <option value="Título de Residência">Título de Residência</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">Número do Documento *</label>
-                          <input 
-                            type="text" 
-                            placeholder="N.º do Passaporte ou BI" 
-                            value={novoBoletim.docNumero} 
-                            onChange={e => setNovoBoletim({...novoBoletim, docNumero: e.target.value})} 
-                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none font-mono" 
-                            required 
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">País Emissor *</label>
-                          <select 
-                            value={novoBoletim.docPais} 
-                            onChange={e => setNovoBoletim({...novoBoletim, docPais: e.target.value})} 
-                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
-                          >
-                            {PAISES.map(p => <option key={p} value={p}>{p}</option>)}
-                          </select>
-                        </div>
-                      </div>
-                    </div>
 
                     {/* 3. Estadia & Valores Financeiros */}
                     <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
