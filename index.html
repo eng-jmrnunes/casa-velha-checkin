@@ -170,14 +170,82 @@
         return str.slice(0, 10);
       };
 
-      const extrairValor = (obj, ...chaves) => {
+      // Mapeamento idêntico ao formulário original para pesquisa e 2ª via
+      const extrairCampoGenerico = (obj, nomesPossiveis) => {
         if (!obj) return '';
-        for (let k of chaves) {
-          if (obj[k] !== undefined && obj[k] !== null && String(obj[k]).trim() !== '') {
-            return String(obj[k]).trim();
+        for (let nome of nomesPossiveis) {
+          if (obj[nome] !== undefined && obj[nome] !== null && String(obj[nome]).trim() !== '') {
+            return String(obj[nome]).trim();
+          }
+        }
+        // Tenta pesquisa insensível a maiúsculas/minúsculas
+        const keys = Object.keys(obj);
+        for (let nome of nomesPossiveis) {
+          const matchKey = keys.find(k => k.toLowerCase().replace(/[^a-z0-9]/g, '') === nome.toLowerCase().replace(/[^a-z0-9]/g, ''));
+          if (matchKey && obj[matchKey] !== undefined && obj[matchKey] !== null && String(obj[matchKey]).trim() !== '') {
+            return String(obj[matchKey]).trim();
           }
         }
         return '';
+      };
+
+      const construirObjetoOriginal = (r) => {
+        const rawNascimento = extrairCampoGenerico(r, ['dataNascimento', 'Data_Nascimento', 'nascimento', 'data_nasc']);
+        const rawEntrada = extrairCampoGenerico(r, ['dataEntrada', 'dataCheckin', 'Data_Entrada', 'checkin', 'entrada']);
+        const rawSaida = extrairCampoGenerico(r, ['dataSaida', 'dataCheckout', 'Data_Saida_Prevista', 'checkout', 'saida']);
+
+        const dEntrada = formatarDataLimpa(rawEntrada);
+        const dSaida = formatarDataLimpa(rawSaida);
+        const dNasc = formatarDataLimpa(rawNascimento);
+
+        const noites = calcularDiferencaNoites(dEntrada, dSaida);
+
+        const idBoletim = extrairCampoGenerico(r, ['idBoletim', 'ID_Boletim', 'id', 'boletim']) || 'CV-HIST';
+        const nome = extrairCampoGenerico(r, ['nome', 'Nome', 'Nome_Completo', 'hospede']);
+        const docTipo = extrairCampoGenerico(r, ['docTipo', 'Tipo_Documento', 'tipodocumento', 'tipo_doc']) || 'Cartão de Cidadão / BI';
+        const docNumero = extrairCampoGenerico(r, ['docNumero', 'Numero_Documento', 'numerodocumento', 'num_doc']);
+        const docPais = extrairCampoGenerico(r, ['docPais', 'Pais_Emissor', 'paisemissor']) || 'Portugal';
+        const nacionalidade = extrairCampoGenerico(r, ['nacionalidade', 'Nacionalidade']) || 'Portugal';
+        const paisResidencia = extrairCampoGenerico(r, ['paisResidencia', 'Pais_Residencia', 'paisresidencia']) || 'Portugal';
+        const tipoAlojamento = extrairCampoGenerico(r, ['tipoAlojamento', 'Tipo_Alojamento', 'alojamento']) || 'Quarto Duplo com Vista Mar';
+        const numeroUnidade = extrairCampoGenerico(r, ['numeroUnidade', 'Numero_Unidade', 'unidade']) || '1';
+        const eMenor = extrairCampoGenerico(r, ['eMenor', 'Menor', 'menor']) || 'Não';
+        const titularDoc = extrairCampoGenerico(r, ['titularDoc', 'Titular_Documento', 'titular']) || 'Próprio';
+        const qualidadeAcompanhante = extrairCampoGenerico(r, ['qualidadeAcompanhante', 'Qualidade_Acompanhante', 'acompanhante']) || 'N/A';
+        const valorReserva = extrairCampoGenerico(r, ['valorReserva', 'Valor_Reserva', 'reserva']) || '0.00';
+        const taxaTuristica = extrairCampoGenerico(r, ['taxaTuristica', 'Taxa_Turistica', 'taxa']) || '0.00';
+        const modoPagamento = extrairCampoGenerico(r, ['modoPagamento', 'Modo_Pagamento', 'pagamento']) || 'Numerário';
+        const funcRececao = extrairCampoGenerico(r, ['funcionarioRececao', 'Funcionario_Rececao', 'funcionario', 'operador']) || selectedFuncObj.nome;
+
+        let funcId = extrairCampoGenerico(r, ['funcionarioId', 'Funcionario_ID', 'id_funcionario']);
+        if (!funcId && funcRececao && funcRececao.includes('[') && funcRececao.includes(']')) {
+          funcId = funcRececao.split('[')[1].split(']')[0];
+        }
+
+        return {
+          rowIndex: r.rowIndex,
+          idBoletim,
+          nome,
+          dataNascimento: dNasc,
+          nacionalidade,
+          paisResidencia,
+          docTipo,
+          docNumero,
+          docPais,
+          tipoAlojamento,
+          numeroUnidade,
+          dataEntrada: dEntrada,
+          dataSaida: dSaida,
+          noitesCalculadas: noites,
+          eMenor,
+          titularDoc,
+          qualidadeAcompanhante,
+          valorReserva,
+          taxaTuristica,
+          modoPagamento,
+          funcionarioNome: funcRececao,
+          funcionarioId: funcId || selectedFuncObj.id || ''
+        };
       };
 
       useEffect(() => {
@@ -214,36 +282,32 @@
             const result = await response.json();
 
             if (result.status === "success" && result.data && result.data.length > 0) {
-              const ultimoRegisto = result.data[result.data.length - 1];
+              const ultimoRaw = result.data[result.data.length - 1];
+              const norm = construirObjetoOriginal(ultimoRaw);
               const totalEstadias = result.data.length;
 
-              const nomeHist = extrairValor(ultimoRegisto, 'nome', 'Nome', 'Nome_Completo');
-              const dEntradaHist = extrairValor(ultimoRegisto, 'dataEntrada', 'dataCheckin', 'Data_Entrada');
-
               setAlertaRecorrente({
-                nome: nomeHist,
+                nome: norm.nome,
                 estadias: totalEstadias,
-                ultimaEntrada: dEntradaHist
+                ultimaEntrada: norm.dataEntrada
               });
 
               setNovoBoletim(prev => ({
                 ...prev,
-                nome: nomeHist || prev.nome,
-                nacionalidade: extrairValor(ultimoRegisto, 'nacionalidade', 'Nacionalidade') || prev.nacionalidade,
-                docTipo: extrairValor(ultimoRegisto, 'docTipo', 'Tipo_Documento') || prev.docTipo,
-                docPais: extrairValor(ultimoRegisto, 'docPais', 'Pais_Emissor') || prev.docPais,
-                paisResidencia: extrairValor(ultimoRegisto, 'paisResidencia', 'Pais_Residencia') || prev.paisResidencia
+                nome: norm.nome || prev.nome,
+                nacionalidade: norm.nacionalidade || prev.nacionalidade,
+                docTipo: norm.docTipo || prev.docTipo,
+                docPais: norm.docPais || prev.docPais,
+                paisResidencia: norm.paisResidencia || prev.paisResidencia
               }));
 
-              const rawNasce = extrairValor(ultimoRegisto, 'dataNascimento', 'Data_Nascimento');
-              if (rawNasce) {
-                const dClean = formatarDataLimpa(rawNasce);
-                const parts = dClean.split('-');
+              if (norm.dataNascimento) {
+                const parts = norm.dataNascimento.split('-');
                 if (parts.length === 3) {
                   setNasceAno(parts[0]);
                   setNasceMes(parts[1]);
                   setNasceDia(parts[2]);
-                  setNovoBoletim(prev => ({ ...prev, dataNascimento: dClean }));
+                  setNovoBoletim(prev => ({ ...prev, dataNascimento: norm.dataNascimento }));
                 }
               }
             } else {
@@ -392,39 +456,10 @@
           const result = await response.json();
 
           if (result.status === "success") {
-            const mappedData = (result.data || []).map(r => {
-              const dEnt = formatarDataLimpa(extrairValor(r, 'dataEntrada', 'dataCheckin', 'Data_Entrada'));
-              const dSai = formatarDataLimpa(extrairValor(r, 'dataSaida', 'dataCheckout', 'Data_Saida_Prevista'));
-              const dNasc = formatarDataLimpa(extrairValor(r, 'dataNascimento', 'Data_Nascimento'));
+            const listMapeada = (result.data || []).map(r => construirObjetoOriginal(r));
+            setSearchResults(listMapeada);
 
-              return {
-                raw: r,
-                rowIndex: r.rowIndex,
-                idBoletim: extrairValor(r, 'idBoletim', 'ID_Boletim', 'id') || 'CV-HIST',
-                nome: extrairValor(r, 'nome', 'Nome', 'Nome_Completo'),
-                dataNascimento: dNasc,
-                docTipo: extrairValor(r, 'docTipo', 'Tipo_Documento') || 'Cartão de Cidadão / BI',
-                docNumero: extrairValor(r, 'docNumero', 'Numero_Documento'),
-                docPais: extrairValor(r, 'docPais', 'Pais_Emissor') || 'Portugal',
-                nacionalidade: extrairValor(r, 'nacionalidade', 'Nacionalidade') || 'Portugal',
-                paisResidencia: extrairValor(r, 'paisResidencia', 'Pais_Residencia') || 'Portugal',
-                tipoAlojamento: extrairValor(r, 'tipoAlojamento', 'Tipo_Alojamento') || 'Quarto Duplo com Vista Mar',
-                numeroUnidade: extrairValor(r, 'numeroUnidade', 'Numero_Unidade') || '1',
-                dataEntrada: dEnt,
-                dataSaida: dSai,
-                eMenor: extrairValor(r, 'eMenor', 'Menor') || 'Não',
-                titularDoc: extrairValor(r, 'titularDoc', 'Titular_Documento') || 'Próprio',
-                qualidadeAcompanhante: extrairValor(r, 'qualidadeAcompanhante', 'Qualidade_Acompanhante') || 'N/A',
-                valorReserva: extrairValor(r, 'valorReserva', 'Valor_Reserva') || '0.00',
-                taxaTuristica: extrairValor(r, 'taxaTuristica', 'Taxa_Turistica') || '0.00',
-                modoPagamento: extrairValor(r, 'modoPagamento', 'Modo_Pagamento') || 'Numerário',
-                funcionarioRececao: extrairValor(r, 'funcionarioRececao', 'Funcionario_Rececao') || selectedFuncObj.nome,
-                funcionarioId: extrairValor(r, 'funcionarioId', 'Funcionario_ID') || ''
-              };
-            });
-
-            setSearchResults(mappedData);
-            if (mappedData.length === 0) {
+            if (listMapeada.length === 0) {
               alert('Nenhum registo encontrado com o termo pesquisado.');
             }
           }
@@ -470,39 +505,9 @@
         }
       };
 
-      const handlePrintFromSearch = (r) => {
-        const noites = calcularDiferencaNoites(r.dataEntrada, r.dataSaida);
-
-        let funcId = r.funcionarioId;
-        if (!funcId && r.funcionarioRececao && r.funcionarioRececao.includes('[') && r.funcionarioRececao.includes(']')) {
-          funcId = r.funcionarioRececao.split('[')[1].split(']')[0];
-        }
-
-        const payloadFromSearch = {
-          idBoletim: r.idBoletim,
-          nome: r.nome,
-          dataNascimento: r.dataNascimento,
-          nacionalidade: r.nacionalidade,
-          paisResidencia: r.paisResidencia,
-          docTipo: r.docTipo,
-          docNumero: r.docNumero,
-          docPais: r.docPais,
-          tipoAlojamento: r.tipoAlojamento,
-          numeroUnidade: r.numeroUnidade,
-          dataEntrada: r.dataEntrada,
-          dataSaida: r.dataSaida,
-          noitesCalculadas: noites,
-          eMenor: r.eMenor,
-          titularDoc: r.titularDoc,
-          qualidadeAcompanhante: r.qualidadeAcompanhante,
-          valorReserva: r.valorReserva,
-          taxaTuristica: r.taxaTuristica,
-          modoPagamento: r.modoPagamento,
-          funcionarioNome: r.funcionarioRececao,
-          funcionarioId: funcId
-        };
-
-        setUltimoSucesso(payloadFromSearch);
+      const handlePrintFromSearch = (itemMapeado) => {
+        // Atribui diretamente o objeto construído para o modal de impressão igual ao original
+        setUltimoSucesso(itemMapeado);
       };
 
       const handleExportCSV = async (e) => {
@@ -1252,7 +1257,7 @@
             </div>
           )}
 
-          {/* MODAL DE SUCESSO & IMPRESSÃO - FORMATO IDÊNTICO PARA ORIGINAL E 2ª VIA */}
+          {/* MODAL DE SUCESSO & IMPRESSÃO */}
           {ultimoSucesso && (
             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
               <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-slate-200">
