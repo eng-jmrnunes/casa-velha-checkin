@@ -170,44 +170,51 @@
         return str.slice(0, 10);
       };
 
-      // Leitura exata dos campos com base na estrutura declarada da folha do Google
-      const lerCampoFolha = (r, nomesPossiveis) => {
-        if (!r) return '';
-        const keys = Object.keys(r);
-        for (let nome of nomesPossiveis) {
-          if (r[nome] !== undefined && r[nome] !== null && String(r[nome]).trim() !== '') {
-            return String(r[nome]).trim();
-          }
-          const matchKey = keys.find(k => k.toLowerCase().replace(/[^a-z0-9]/g, '') === nome.toLowerCase().replace(/[^a-z0-9]/g, ''));
-          if (matchKey && r[matchKey] !== undefined && r[matchKey] !== null && String(r[matchKey]).trim() !== '') {
-            return String(r[matchKey]).trim();
+      const formatarMoedaLimpa = (val) => {
+        if (val === undefined || val === null || val === '') return '0.00';
+        const num = parseFloat(String(val).replace(',', '.'));
+        return isNaN(num) ? '0.00' : num.toFixed(2);
+      };
+
+      // Leitor universal insensível a maiúsculas, minúsculas, sublinhados e espaços
+      const extrairPropriedadeUltraRobusta = (obj, aliases) => {
+        if (!obj) return '';
+        const keys = Object.keys(obj);
+        
+        for (let alias of aliases) {
+          const aliasClean = alias.toLowerCase().replace(/[^a-z0-9]/g, '');
+          const matchKey = keys.find(k => k.toLowerCase().replace(/[^a-z0-9]/g, '') === aliasClean);
+          
+          if (matchKey && obj[matchKey] !== undefined && obj[matchKey] !== null && String(obj[matchKey]).trim() !== '') {
+            return String(obj[matchKey]).trim();
           }
         }
         return '';
       };
 
-      const mapearRegistoDaFolha = (r) => {
-        const idBoletim = lerCampoFolha(r, ['ID_Boletim', 'idBoletim', 'id']) || 'CV-HIST';
-        const nome = lerCampoFolha(r, ['Nome', 'nome']);
-        const dataNascimento = formatarDataLimpa(lerCampoFolha(r, ['Data_Nascimento', 'dataNascimento', 'Nascimento']));
-        const nacionalidade = lerCampoFolha(r, ['Nacionalidade', 'nacionalidade']) || 'Portugal';
-        const docTipo = lerCampoFolha(r, ['Tipo_Documento', 'docTipo', 'tipodocumento']) || 'Cartão de Cidadão / BI';
-        const docNumero = lerCampoFolha(r, ['Numero_Documento', 'docNumero', 'numerodocumento']);
-        const docPais = lerCampoFolha(r, ['Pais_Emissor', 'docPais', 'paisemissor']) || 'Portugal';
-        const paisResidencia = lerCampoFolha(r, ['Pais_Residencia', 'paisResidencia', 'paisresidencia']) || 'Portugal';
+      const mapearLinhaParaObjetoBoletim = (r) => {
+        const idBoletim = extrairPropriedadeUltraRobusta(r, ['ID_Boletim', 'idBoletim', 'id']) || 'CV-HIST';
+        const nome = extrairPropriedadeUltraRobusta(r, ['Nome', 'nome', 'hospede', 'nomecompleto']);
+        const dataNascimento = formatarDataLimpa(extrairPropriedadeUltraRobusta(r, ['Data_Nascimento', 'dataNascimento', 'nascimento', 'datanasc']));
+        const nacionalidade = extrairPropriedadeUltraRobusta(r, ['Nacionalidade', 'nacionalidade']) || 'Portugal';
+        const docTipo = extrairPropriedadeUltraRobusta(r, ['Tipo_Documento', 'docTipo', 'tipodocumento', 'tipodoc']) || 'Cartão de Cidadão / BI';
+        const docNumero = extrairPropriedadeUltraRobusta(r, ['Numero_Documento', 'docNumero', 'numerodocumento', 'numdoc']);
+        const docPais = extrairPropriedadeUltraRobusta(r, ['Pais_Emissor', 'docPais', 'paisemissor']) || 'Portugal';
+        const paisResidencia = extrairPropriedadeUltraRobusta(r, ['Pais_Residencia', 'paisResidencia', 'paisresidencia']) || 'Portugal';
         
-        const dataEntrada = formatarDataLimpa(lerCampoFolha(r, ['Check_In', 'dataEntrada', 'dataCheckin', 'checkin']));
-        const dataSaida = formatarDataLimpa(lerCampoFolha(r, ['Check_Out', 'dataSaida', 'dataCheckout', 'checkout']));
+        const dataEntrada = formatarDataLimpa(extrairPropriedadeUltraRobusta(r, ['Check_In', 'checkin', 'dataEntrada', 'dataCheckin', 'entrada']));
+        const dataSaida = formatarDataLimpa(extrairPropriedadeUltraRobusta(r, ['Check_Out', 'checkout', 'dataSaida', 'dataCheckout', 'saida']));
         
-        const tipoAlojamento = lerCampoFolha(r, ['Tipo_Alojamento', 'tipoAlojamento', 'alojamento']) || 'Quarto Duplo com Vista Mar';
-        const numeroUnidade = lerCampoFolha(r, ['Numero_Unidade', 'numeroUnidade', 'unidade']) || '1';
-        const eMenor = lerCampoFolha(r, ['E_Menor', 'eMenor', 'menor']) || 'Não';
-        const titularDoc = lerCampoFolha(r, ['Titular_Documento', 'titularDoc', 'titular']) || 'Próprio';
-        const qualidadeAcompanhante = lerCampoFolha(r, ['Qualidade_Acompanhante', 'qualidadeAcompanhante', 'acompanhante']) || 'N/A';
-        const valorReserva = lerCampoFolha(r, ['Valor_Reserva', 'valorReserva', 'reserva']) || '0.00';
-        const taxaTuristica = lerCampoFolha(r, ['Taxa_Turistica', 'taxaTuristica', 'taxa']) || '0.00';
-        const modoPagamento = lerCampoFolha(r, ['Modo_Pagamento', 'modoPagamento', 'pagamento']) || 'Numerário';
-        const funcRececao = lerCampoFolha(r, ['Funcionario_Rececao', 'funcionarioRececao', 'funcionario']) || selectedFuncObj.nome;
+        const tipoAlojamento = extrairPropriedadeUltraRobusta(r, ['Tipo_Alojamento', 'tipoAlojamento', 'alojamento']) || 'Quarto Duplo com Vista Mar';
+        const numeroUnidade = extrairPropriedadeUltraRobusta(r, ['Numero_Unidade', 'numeroUnidade', 'unidade']) || '1';
+        const eMenor = extrairPropriedadeUltraRobusta(r, ['E_Menor', 'eMenor', 'menor']) || 'Não';
+        const titularDoc = extrairPropriedadeUltraRobusta(r, ['Titular_Documento', 'titularDoc', 'titular']) || 'Próprio';
+        const qualidadeAcompanhante = extrairPropriedadeUltraRobusta(r, ['Qualidade_Acompanhante', 'qualidadeAcompanhante', 'acompanhante']) || 'N/A';
+        
+        const valorReserva = formatarMoedaLimpa(extrairPropriedadeUltraRobusta(r, ['Valor_Reserva', 'valorReserva', 'reserva']));
+        const taxaTuristica = formatarMoedaLimpa(extrairPropriedadeUltraRobusta(r, ['Taxa_Turistica', 'taxaTuristica', 'taxa']));
+        const modoPagamento = extrairPropriedadeUltraRobusta(r, ['Modo_Pagamento', 'modoPagamento', 'pagamento']) || 'Numerário';
+        const funcRececao = extrairPropriedadeUltraRobusta(r, ['Funcionario_Rececao', 'funcionarioRececao', 'funcionario', 'operador']) || selectedFuncObj.nome;
 
         let funcId = '';
         if (funcRececao && funcRececao.includes('[') && funcRececao.includes(']')) {
@@ -277,7 +284,7 @@
 
             if (result.status === "success" && result.data && result.data.length > 0) {
               const ultimoRaw = result.data[result.data.length - 1];
-              const norm = mapearRegistoDaFolha(ultimoRaw);
+              const norm = mapearLinhaParaObjetoBoletim(ultimoRaw);
               const totalEstadias = result.data.length;
 
               setAlertaRecorrente({
@@ -450,7 +457,7 @@
           const result = await response.json();
 
           if (result.status === "success") {
-            const listMapeada = (result.data || []).map(r => mapearRegistoDaFolha(r));
+            const listMapeada = (result.data || []).map(r => mapearLinhaParaObjetoBoletim(r));
             setSearchResults(listMapeada);
 
             if (listMapeada.length === 0) {
