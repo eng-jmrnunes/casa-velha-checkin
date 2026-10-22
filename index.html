@@ -87,12 +87,12 @@
       const [idadeCalculada, setIdadeCalculada] = useState(null);
       const [ultimoSucesso, setUltimoSucesso] = useState(null);
       
-      // Estado para o modal "Sobre o Estabelecimento"
       const [showSobreModal, setShowSobreModal] = useState(false);
+      const [showBoletimForm, setShowBoletimForm] = useState(true);
 
       // Estado do Operador / Receção
       const [funcionarios, setFuncionarios] = useState([]);
-      const [funcionarioSelecionado, setFuncionarioSelecionado] = useState('');
+      const [selectedFuncObj, setSelectedFuncObj] = useState({ id: '', nome: '' });
       const [passwordInativa, setPasswordInativa] = useState('');
 
       const [nasceAno, setNasceAno] = useState('');
@@ -116,8 +116,7 @@
         qualidadeAcompanhante: 'N/A',
         valorReserva: '',
         taxaTuristica: '',
-        modoPagamento: 'Numerário',
-        funcionarioRececao: ''
+        modoPagamento: 'Numerário'
       });
 
       const todayStr = new Date().toISOString().slice(0, 10);
@@ -134,9 +133,7 @@
         .then(res => {
           if (res.status === "success" && res.data && res.data.length > 0) {
             setFuncionarios(res.data);
-            const primeiroLabel = `[${res.data[0].id}] ${res.data[0].nome}`;
-            setFuncionarioSelecionado(primeiroLabel);
-            setNovoBoletim(prev => ({ ...prev, funcionarioRececao: primeiroLabel }));
+            setSelectedFuncObj(res.data[0]);
           }
         })
         .catch(() => {});
@@ -217,10 +214,16 @@
         setLoading(true);
 
         const idBoletim = gerarIDBoletim();
+        const funcionarioString = selectedFuncObj.id 
+          ? `[${selectedFuncObj.id}] ${selectedFuncObj.nome}` 
+          : selectedFuncObj.nome;
+
         const payload = { 
           ...novoBoletim, 
           idBoletim, 
-          funcionarioRececao: funcionarioSelecionado 
+          funcionarioRececao: funcionarioString,
+          funcionarioId: selectedFuncObj.id || 'N/A',
+          funcionarioNome: selectedFuncObj.nome || funcionarioString
         };
 
         try {
@@ -250,8 +253,7 @@
             qualidadeAcompanhante: 'N/A',
             valorReserva: '',
             taxaTuristica: '',
-            modoPagamento: 'Numerário',
-            funcionarioRececao: funcionarioSelecionado
+            modoPagamento: 'Numerário'
           });
           setNasceAno('');
           setIdadeCalculada(null);
@@ -399,75 +401,74 @@
 
       return (
         <div className="min-h-screen pb-12">
+          {/* CABEÇALHO PRINCIPAL COM LOGIN INTEGRADO NO TOPO DIREITO */}
           <header className="bg-slate-900 text-white p-4 shadow-md">
-            <div className="max-w-3xl mx-auto flex justify-between items-center">
+            <div className="max-w-3xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <div>
-                <h1 className="text-xl font-bold">🏠 Casa Velha - Terminal de Check-in</h1>
-                <p className="text-xs text-slate-400">Registo Oficial de Boletins de Alojamento (AIMA / SIBA)</p>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-xl font-bold">🏠 Casa Velha</h1>
+                  <button 
+                    onClick={() => setShowSobreModal(true)}
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[11px] font-semibold px-2.5 py-1 rounded transition flex items-center gap-1"
+                  >
+                    ℹ️ Sobre
+                  </button>
+                </div>
+                <p className="text-xs text-slate-400">Terminal de Check-in & AIMA (AL 166503/AL)</p>
               </div>
-              <button 
-                onClick={() => setShowSobreModal(true)}
-                className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold px-3 py-2 rounded-lg transition shadow flex items-center gap-1.5"
-              >
-                ℹ️ Sobre o Estabelecimento
-              </button>
-            </div>
-          </header>
 
-          <main className="max-w-3xl mx-auto p-4 mt-4 space-y-6">
-            
-            {/* GRUPO DE LOGIN / OPERADOR DA RECEÇÃO */}
-            <div className="bg-slate-800 text-white p-4 rounded-xl shadow-md border border-slate-700">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-300 mb-3 flex items-center gap-2">
-                👤 Identificação do Funcionário na Receção
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                <div>
-                  <label className="block text-slate-400 mb-1 font-semibold">Funcionário em Serviço *</label>
+              {/* LOGIN DO FUNCIONÁRIO NO CANTO SUPERIOR DIREITO */}
+              <div className="bg-slate-800 p-2.5 rounded-lg border border-slate-700 flex items-center gap-2 text-xs w-full md:w-auto">
+                <span className="text-slate-400 font-semibold hidden sm:inline">👤 Receção:</span>
+                
+                {/* DROPDOWN DE NOME (ID OCULTO) */}
+                <div className="flex-1 md:flex-initial">
                   {funcionarios.length > 0 ? (
                     <select 
-                      value={funcionarioSelecionado} 
+                      value={selectedFuncObj.id || selectedFuncObj.nome}
                       onChange={e => {
-                        setFuncionarioSelecionado(e.target.value);
-                        setNovoBoletim(prev => ({ ...prev, funcionarioRececao: e.target.value }));
+                        const val = e.target.value;
+                        const found = funcionarios.find(f => f.id === val || f.nome === val);
+                        if (found) {
+                          setSelectedFuncObj(found);
+                        } else {
+                          setSelectedFuncObj({ id: '', nome: val });
+                        }
                       }}
-                      className="w-full border border-slate-600 p-2 rounded bg-slate-900 text-white font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full bg-slate-900 text-white border border-slate-600 rounded px-2 py-1 font-bold outline-none focus:ring-1 focus:ring-blue-500 text-xs"
                     >
                       {funcionarios.map(f => (
-                        <option key={f.id} value={`[${f.id}] ${f.nome}`}>
-                          [{f.id}] {f.nome}
+                        <option key={f.id || f.nome} value={f.id || f.nome}>
+                          {f.nome}
                         </option>
                       ))}
                     </select>
                   ) : (
                     <input 
                       type="text" 
-                      placeholder="Ex: [EMP-001] José Nunes" 
-                      value={funcionarioSelecionado}
-                      onChange={e => {
-                        setFuncionarioSelecionado(e.target.value);
-                        setNovoBoletim(prev => ({ ...prev, funcionarioRececao: e.target.value }));
-                      }}
-                      className="w-full border border-slate-600 p-2 rounded bg-slate-900 text-white font-bold"
+                      placeholder="Nome do Funcionário" 
+                      value={selectedFuncObj.nome}
+                      onChange={e => setSelectedFuncObj({ id: 'FUNC', nome: e.target.value })}
+                      className="w-full bg-slate-900 text-white border border-slate-600 rounded px-2 py-1 font-bold text-xs"
                     />
                   )}
                 </div>
-                <div>
-                  <label className="block text-slate-400 mb-1 font-semibold flex justify-between">
-                    <span>Palavra-passe</span>
-                    <span className="text-[10px] text-amber-400 font-normal">(Inativa temporariamente)</span>
-                  </label>
-                  <input 
-                    type="password" 
-                    placeholder="••••••••" 
-                    value={passwordInativa} 
-                    onChange={e => setPasswordInativa(e.target.value)} 
-                    disabled
-                    className="w-full border border-slate-700 p-2 rounded bg-slate-950 text-slate-500 cursor-not-allowed opacity-60"
-                  />
-                </div>
+
+                {/* PASS INATIVA */}
+                <input 
+                  type="password" 
+                  placeholder="••••" 
+                  value={passwordInativa} 
+                  onChange={e => setPasswordInativa(e.target.value)} 
+                  disabled
+                  title="Palavra-passe (Desativada temporariamente)"
+                  className="w-16 bg-slate-950 text-slate-600 border border-slate-700 rounded px-2 py-1 cursor-not-allowed text-xs text-center"
+                />
               </div>
             </div>
+          </header>
+
+          <main className="max-w-3xl mx-auto p-4 mt-4 space-y-6">
 
             {/* PAINEL 1: PESQUISAR E ALTERAR CHECK-OUT PREVISTO */}
             <div className="bg-blue-50 p-5 rounded-xl border border-blue-200 shadow-sm space-y-3">
@@ -580,402 +581,256 @@
               </form>
             </div>
 
-            {/* PAINEL 3: NOVO FORMULÁRIO DE CHECK-IN */}
-            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
-              <div className="border-b pb-3">
-                <h2 className="text-lg font-bold text-slate-800">📋 Novo Boletim de Alojamento</h2>
-                <p className="text-xs text-slate-500">Introduza os dados de identificação do hóspede (nacional ou estrangeiro).</p>
-              </div>
-
-              <form onSubmit={handleSubmit} className="space-y-4 text-sm">
-                
-                {/* 1. Dados Pessoais */}
-                <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
-                  <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">1. Dados do Hóspede</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    
-                    {/* NOME COMPLETO: LARGURA TOTAL ALINHADA */}
-                    <div className="sm:col-span-3">
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Nome Completo *</label>
-                      <input 
-                        type="text" 
-                        placeholder="Nome conforme consta no documento de identificação" 
-                        value={novoBoletim.nome} 
-                        onChange={e => setNovoBoletim({...novoBoletim, nome: e.target.value})} 
-                        className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none font-medium" 
-                        required 
-                      />
-                    </div>
-
-                    {/* SELEÇÃO RÁPIDA DE DATA DE NASCIMENTO */}
-                    <div className="sm:col-span-3 bg-white p-3 rounded border border-slate-200">
-                      <div className="flex justify-between items-center mb-1.5">
-                        <label className="block text-xs font-semibold text-slate-700">Data de Nascimento *</label>
-                        {idadeCalculada !== null && (
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${idadeCalculada < 18 ? 'bg-purple-200 text-purple-900' : 'bg-slate-200 text-slate-700'}`}>
-                            {idadeCalculada} {idadeCalculada === 1 ? 'ano' : 'anos'} ({idadeCalculada < 18 ? 'Menor' : 'Adulto'})
-                          </span>
-                        )}
-                      </div>
-                      
-                      <div className="grid grid-cols-3 gap-2">
-                        <div>
-                          <label className="block text-[10px] text-slate-500 mb-0.5">Ano</label>
-                          <select 
-                            value={nasceAno} 
-                            onChange={e => handleSelectNascimento(e.target.value, nasceMes, nasceDia)}
-                            className="w-full border border-slate-300 p-2 rounded bg-white text-xs font-bold"
-                            required
-                          >
-                            <option value="">-- Seleção --</option>
-                            {ANOS_LISTA.map(a => <option key={a} value={a}>{a}</option>)}
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="block text-[10px] text-slate-500 mb-0.5">Mês</label>
-                          <select 
-                            value={nasceMes} 
-                            onChange={e => handleSelectNascimento(nasceAno, e.target.value, nasceDia)}
-                            className="w-full border border-slate-300 p-2 rounded bg-white text-xs font-medium"
-                          >
-                            {MESES_LISTA.map(m => <option key={m.num} value={m.num}>{m.nome}</option>)}
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="block text-[10px] text-slate-500 mb-0.5">Dia</label>
-                          <select 
-                            value={nasceDia} 
-                            onChange={e => handleSelectNascimento(nasceAno, nasceMes, e.target.value)}
-                            className="w-full border border-slate-300 p-2 rounded bg-white text-xs font-medium"
-                          >
-                            {Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0')).map(d => (
-                              <option key={d} value={d}>{d}</option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Nacionalidade *</label>
-                      <select 
-                        value={novoBoletim.nacionalidade} 
-                        onChange={e => setNovoBoletim({...novoBoletim, nacionalidade: e.target.value})} 
-                        className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
-                      >
-                        {PAISES.map(p => <option key={p} value={p}>{p}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">País de Residência *</label>
-                      <select 
-                        value={novoBoletim.paisResidencia} 
-                        onChange={e => setNovoBoletim({...novoBoletim, paisResidencia: e.target.value})} 
-                        className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
-                      >
-                        {PAISES.map(p => <option key={p} value={p}>{p}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Tipo de Alojamento *</label>
-                      <select 
-                        value={novoBoletim.tipoAlojamento} 
-                        onChange={e => setNovoBoletim({...novoBoletim, tipoAlojamento: e.target.value})} 
-                        className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
-                      >
-                        {TIPOS_ALOJAMENTO.map(t => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Número do Alojamento / Unidade *</label>
-                      <input 
-                        type="text" 
-                        placeholder="Ex: N.º 1, 102, R/C" 
-                        value={novoBoletim.numeroUnidade} 
-                        onChange={e => setNovoBoletim({...novoBoletim, numeroUnidade: e.target.value})} 
-                        className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none font-medium" 
-                        required 
-                      />
-                    </div>
-                  </div>
+            {/* PAINEL 3: NOVO FORMULÁRIO DE CHECK-IN (COM BOTAO/SETA PARA COLAPSAR) */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              <div 
+                onClick={() => setShowBoletimForm(!showBoletimForm)}
+                className="p-5 bg-slate-50 border-b border-slate-200 flex justify-between items-center cursor-pointer select-none hover:bg-slate-100 transition"
+              >
+                <div>
+                  <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    📋 Novo Boletim de Alojamento
+                  </h2>
+                  <p className="text-xs text-slate-500">Introduza os dados de identificação do hóspede (nacional ou estrangeiro).</p>
                 </div>
-
-                {/* PAINEL AUTOMÁTICO DE MENOR DE IDADE */}
-                {novoBoletim.eMenor === 'Sim' && (
-                  <div className="bg-purple-50 p-4 rounded-lg border border-purple-200 space-y-3 transition-all">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-bold text-purple-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
-                        👶 Hóspede Detetado como Menor de Idade ({idadeCalculada} anos)
-                      </h3>
-                      <span className="text-[11px] font-bold bg-purple-200 text-purple-900 px-2 py-0.5 rounded">
-                        Requisito AIMA
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-purple-200 text-xs">
-                      <div>
-                        <label className="block font-semibold text-purple-900 mb-1">Titular do Documento Apresentado *</label>
-                        <select 
-                          value={novoBoletim.titularDoc} 
-                          onChange={e => setNovoBoletim({...novoBoletim, titularDoc: e.target.value})} 
-                          className="w-full border border-purple-300 p-2.5 rounded bg-white font-medium"
-                        >
-                          <option value="Documento do Acompanhante">Documento do Acompanhante / Responsável</option>
-                          <option value="Documento Próprio do Menor">Documento Próprio do Menor</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block font-semibold text-purple-900 mb-1">Qualidade do Acompanhante *</label>
-                        <select 
-                          value={novoBoletim.qualidadeAcompanhante} 
-                          onChange={e => setNovoBoletim({...novoBoletim, qualidadeAcompanhante: e.target.value})} 
-                          className="w-full border border-purple-300 p-2.5 rounded bg-white font-medium"
-                        >
-                          <option value="Pai / Mãe">Pai / Mãe</option>
-                          <option value="Tutor Legal">Tutor Legal</option>
-                          <option value="Outro Familiar">Outro Familiar</option>
-                          <option value="Acompanhante Autorizado">Acompanhante Autorizado</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* 2. Documento */}
-                <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
-                  <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">
-                    2. Documento de Identificação {novoBoletim.eMenor === 'Sim' && novoBoletim.titularDoc === 'Documento do Acompanhante' && '(do Acompanhante Responsável)'}
-                  </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Tipo de Documento *</label>
-                      <select 
-                        value={novoBoletim.docTipo} 
-                        onChange={e => setNovoBoletim({...novoBoletim, docTipo: e.target.value})} 
-                        className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                      >
-                        <option value="Cartão de Cidadão / BI">Cartão de Cidadão / BI</option>
-                        <option value="Passaporte">Passaporte</option>
-                        <option value="Título de Residência">Título de Residência</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Número do Documento *</label>
-                      <input 
-                        type="text" 
-                        placeholder="N.º do Passaporte ou BI" 
-                        value={novoBoletim.docNumero} 
-                        onChange={e => setNovoBoletim({...novoBoletim, docNumero: e.target.value})} 
-                        className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none font-mono" 
-                        required 
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">País Emissor *</label>
-                      <select 
-                        value={novoBoletim.docPais} 
-                        onChange={e => setNovoBoletim({...novoBoletim, docPais: e.target.value})} 
-                        className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
-                      >
-                        {PAISES.map(p => <option key={p} value={p}>{p}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 3. Estadia & Valores Financeiros */}
-                <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
-                  <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">3. Período da Estadia & Pagamentos</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Data de Entrada (Check-in) *</label>
-                      <input 
-                        type="date" 
-                        value={novoBoletim.dataEntrada} 
-                        onChange={e => setNovoBoletim({...novoBoletim, dataEntrada: e.target.value})} 
-                        className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none" 
-                        required 
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Data Prevista de Saída (Check-out) *</label>
-                      <input 
-                        type="date" 
-                        value={novoBoletim.dataSaida} 
-                        onChange={e => setNovoBoletim({...novoBoletim, dataSaida: e.target.value})} 
-                        className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none" 
-                        required 
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-emerald-800 mb-1">Valor da Reserva (€)</label>
-                      <input 
-                        type="number" 
-                        step="0.01"
-                        placeholder="Ex: 150.00" 
-                        value={novoBoletim.valorReserva} 
-                        onChange={e => setNovoBoletim({...novoBoletim, valorReserva: e.target.value})} 
-                        className="w-full border border-emerald-300 p-2.5 rounded bg-emerald-50/50 font-bold text-emerald-900 focus:ring-2 focus:ring-emerald-500 outline-none" 
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-emerald-800 mb-1">Valor da Taxa Turística (€)</label>
-                      <input 
-                        type="number" 
-                        step="0.01"
-                        placeholder="Ex: 4.00" 
-                        value={novoBoletim.taxaTuristica} 
-                        onChange={e => setNovoBoletim({...novoBoletim, taxaTuristica: e.target.value})} 
-                        className="w-full border border-emerald-300 p-2.5 rounded bg-emerald-50/50 font-bold text-emerald-900 focus:ring-2 focus:ring-emerald-500 outline-none" 
-                      />
-                    </div>
-
-                    {/* MODO DE PAGAMENTO */}
-                    <div className="sm:col-span-2">
-                      <label className="block text-xs font-semibold text-emerald-800 mb-1">Modo de Pagamento *</label>
-                      <select 
-                        value={novoBoletim.modoPagamento} 
-                        onChange={e => setNovoBoletim({...novoBoletim, modoPagamento: e.target.value})} 
-                        className="w-full border border-emerald-300 p-2.5 rounded bg-emerald-50/50 font-bold text-emerald-900 focus:ring-2 focus:ring-emerald-500 outline-none"
-                      >
-                        {MODOS_PAGAMENTO.map(m => <option key={m} value={m}>{m}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                <button 
-                  type="submit" 
-                  disabled={loading}
-                  className="w-full bg-blue-700 text-white font-bold py-3.5 rounded-lg hover:bg-blue-800 transition shadow text-base disabled:bg-slate-400"
-                >
-                  {loading ? 'A Guardar...' : '💾 Confirmar Check-in'}
+                <button type="button" className="text-slate-600 hover:text-slate-900 text-lg font-bold p-1">
+                  {showBoletimForm ? '▲' : '▼'}
                 </button>
-              </form>
-            </div>
-          </main>
-
-          {/* MODAL: SOBRE O ESTABELECIMENTO (RNAL) */}
-          {showSobreModal && (
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-              <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200">
-                <div className="text-center border-b pb-3">
-                  <h2 className="text-lg font-bold text-slate-900">🏠 Casa Velha</h2>
-                  <p className="text-xs text-slate-500">Informação Legal & Registo de Alojamento Local</p>
-                </div>
-
-                <div className="space-y-3 text-xs text-slate-700">
-                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Registo RNAL:</span>
-                      <strong className="text-slate-900 font-mono">166503/AL</strong>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Data de Registo RNAL:</span>
-                      <strong className="text-slate-900">21-06-2025</strong>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Abertura ao Público:</span>
-                      <strong className="text-slate-900">23-02-2018</strong>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Título Autorização Utilização:</span>
-                      <strong className="text-slate-900 font-mono">N.º 63/18</strong>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Registo Oficial INE:</span>
-                      <strong className="text-slate-900">Sim</strong>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-2">
-                  <button 
-                    onClick={() => setShowSobreModal(false)}
-                    className="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-2.5 rounded-lg transition text-xs"
-                  >
-                    Fechar
-                  </button>
-                </div>
               </div>
-            </div>
-          )}
 
-          {/* MODAL DE SUCESSO & IMPRESSÃO */}
-          {ultimoSucesso && (
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-              <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-slate-200">
-                
-                <div id="printable-boletim" className="space-y-4 text-xs font-sans text-slate-800 p-2">
-                  <div className="text-center border-b pb-3">
-                    <h2 className="text-base font-bold text-slate-900">🏠 Casa Velha - Comprovativo de Check-in</h2>
-                    <p className="text-[11px] text-slate-500">Boletim de Alojamento (RNAL n.º 166503/AL)</p>
-                    <span className="inline-block mt-1 font-mono font-bold bg-blue-100 text-blue-900 px-2 py-0.5 rounded text-xs">
-                      ID: {ultimoSucesso.idBoletim}
-                    </span>
-                  </div>
+              {showBoletimForm && (
+                <div className="p-6">
+                  <form onSubmit={handleSubmit} className="space-y-4 text-sm">
+                    
+                    {/* 1. Dados Pessoais */}
+                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
+                      <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">1. Dados do Hóspede</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        
+                        {/* NOME COMPLETO: LARGURA TOTAL ALINHADA */}
+                        <div className="sm:col-span-3">
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Nome Completo *</label>
+                          <input 
+                            type="text" 
+                            placeholder="Nome conforme consta no documento de identificação" 
+                            value={novoBoletim.nome} 
+                            onChange={e => setNovoBoletim({...novoBoletim, nome: e.target.value})} 
+                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none font-medium" 
+                            required 
+                          />
+                        </div>
 
-                  <div className="space-y-2 border-b pb-3">
-                    <div><strong className="text-slate-600">Hóspede:</strong> {ultimoSucesso.nome}</div>
-                    <div><strong className="text-slate-600">Data de Nascimento:</strong> {ultimoSucesso.dataNascimento} ({ultimoSucesso.eMenor === 'Sim' ? 'Menor' : 'Adulto'})</div>
-                    <div><strong className="text-slate-600">Nacionalidade:</strong> {ultimoSucesso.nacionalidade} | <strong className="text-slate-600">Residência:</strong> {ultimoSucesso.paisResidencia}</div>
-                    <div><strong className="text-slate-600">Documento:</strong> {ultimoSucesso.docTipo} N.º {ultimoSucesso.docNumero} ({ultimoSucesso.docPais})</div>
-                    {ultimoSucesso.eMenor === 'Sim' && (
-                      <div className="p-2 bg-purple-50 rounded border border-purple-200">
-                        <strong>Informação de Menor:</strong> {ultimoSucesso.titularDoc} | Acompanhante: {ultimoSucesso.qualidadeAcompanhante}
+                        {/* SELEÇÃO RÁPIDA DE DATA DE NASCIMENTO */}
+                        <div className="sm:col-span-3 bg-white p-3 rounded border border-slate-200">
+                          <div className="flex justify-between items-center mb-1.5">
+                            <label className="block text-xs font-semibold text-slate-700">Data de Nascimento *</label>
+                            {idadeCalculada !== null && (
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${idadeCalculada < 18 ? 'bg-purple-200 text-purple-900' : 'bg-slate-200 text-slate-700'}`}>
+                                {idadeCalculada} {idadeCalculada === 1 ? 'ano' : 'anos'} ({idadeCalculada < 18 ? 'Menor' : 'Adulto'})
+                              </span>
+                            )}
+                          </div>
+                          
+                          <div className="grid grid-cols-3 gap-2">
+                            <div>
+                              <label className="block text-[10px] text-slate-500 mb-0.5">Ano</label>
+                              <select 
+                                value={nasceAno} 
+                                onChange={e => handleSelectNascimento(e.target.value, nasceMes, nasceDia)}
+                                className="w-full border border-slate-300 p-2 rounded bg-white text-xs font-bold"
+                                required
+                              >
+                                <option value="">-- Seleção --</option>
+                                {ANOS_LISTA.map(a => <option key={a} value={a}>{a}</option>)}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] text-slate-500 mb-0.5">Mês</label>
+                              <select 
+                                value={nasceMes} 
+                                onChange={e => handleSelectNascimento(nasceAno, e.target.value, nasceDia)}
+                                className="w-full border border-slate-300 p-2 rounded bg-white text-xs font-medium"
+                              >
+                                {MESES_LISTA.map(m => <option key={m.num} value={m.num}>{m.nome}</option>)}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] text-slate-500 mb-0.5">Dia</label>
+                              <select 
+                                value={nasceDia} 
+                                onChange={e => handleSelectNascimento(nasceAno, nasceMes, e.target.value)}
+                                className="w-full border border-slate-300 p-2 rounded bg-white text-xs font-medium"
+                              >
+                                {Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0')).map(d => (
+                                  <option key={d} value={d}>{d}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Nacionalidade *</label>
+                          <select 
+                            value={novoBoletim.nacionalidade} 
+                            onChange={e => setNovoBoletim({...novoBoletim, nacionalidade: e.target.value})} 
+                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
+                          >
+                            {PAISES.map(p => <option key={p} value={p}>{p}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">País de Residência *</label>
+                          <select 
+                            value={novoBoletim.paisResidencia} 
+                            onChange={e => setNovoBoletim({...novoBoletim, paisResidencia: e.target.value})} 
+                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
+                          >
+                            {PAISES.map(p => <option key={p} value={p}>{p}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Tipo de Alojamento *</label>
+                          <select 
+                            value={novoBoletim.tipoAlojamento} 
+                            onChange={e => setNovoBoletim({...novoBoletim, tipoAlojamento: e.target.value})} 
+                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
+                          >
+                            {TIPOS_ALOJAMENTO.map(t => <option key={t} value={t}>{t}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Número do Alojamento / Unidade *</label>
+                          <input 
+                            type="text" 
+                            placeholder="Ex: N.º 1, 102, R/C" 
+                            value={novoBoletim.numeroUnidade} 
+                            onChange={e => setNovoBoletim({...novoBoletim, numeroUnidade: e.target.value})} 
+                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none font-medium" 
+                            required 
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* PAINEL AUTOMÁTICO DE MENOR DE IDADE */}
+                    {novoBoletim.eMenor === 'Sim' && (
+                      <div className="bg-purple-50 p-4 rounded-lg border border-purple-200 space-y-3 transition-all">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-bold text-purple-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                            👶 Hóspede Detetado como Menor de Idade ({idadeCalculada} anos)
+                          </h3>
+                          <span className="text-[11px] font-bold bg-purple-200 text-purple-900 px-2 py-0.5 rounded">
+                            Requisito AIMA
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-purple-200 text-xs">
+                          <div>
+                            <label className="block font-semibold text-purple-900 mb-1">Titular do Documento Apresentado *</label>
+                            <select 
+                              value={novoBoletim.titularDoc} 
+                              onChange={e => setNovoBoletim({...novoBoletim, titularDoc: e.target.value})} 
+                              className="w-full border border-purple-300 p-2.5 rounded bg-white font-medium"
+                            >
+                              <option value="Documento do Acompanhante">Documento do Acompanhante / Responsável</option>
+                              <option value="Documento Próprio do Menor">Documento Próprio do Menor</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block font-semibold text-purple-900 mb-1">Qualidade do Acompanhante *</label>
+                            <select 
+                              value={novoBoletim.qualidadeAcompanhante} 
+                              onChange={e => setNovoBoletim({...novoBoletim, qualidadeAcompanhante: e.target.value})} 
+                              className="w-full border border-purple-300 p-2.5 rounded bg-white font-medium"
+                            >
+                              <option value="Pai / Mãe">Pai / Mãe</option>
+                              <option value="Tutor Legal">Tutor Legal</option>
+                              <option value="Outro Familiar">Outro Familiar</option>
+                              <option value="Acompanhante Autorizado">Acompanhante Autorizado</option>
+                            </select>
+                          </div>
+                        </div>
                       </div>
                     )}
-                  </div>
 
-                  <div className="space-y-1 border-b pb-3">
-                    <div><strong className="text-slate-600">Alojamento:</strong> {ultimoSucesso.tipoAlojamento} (Unidade {ultimoSucesso.numeroUnidade})</div>
-                    <div><strong className="text-slate-600">Check-in:</strong> {ultimoSucesso.dataEntrada} → <strong className="text-slate-600">Check-out Previsto:</strong> {ultimoSucesso.dataSaida}</div>
-                  </div>
-
-                  {(ultimoSucesso.valorReserva || ultimoSucesso.taxaTuristica) && (
-                    <div className="p-2 bg-emerald-50 rounded border border-emerald-200 space-y-1 font-medium text-emerald-900">
-                      <div className="flex justify-between">
-                        <span>Valor Reserva: <strong>{ultimoSucesso.valorReserva ? `${ultimoSucesso.valorReserva} €` : 'N/A'}</strong></span>
-                        <span>Taxa Turística: <strong>{ultimoSucesso.taxaTuristica ? `${ultimoSucesso.taxaTuristica} €` : 'N/A'}</strong></span>
+                    {/* 2. Documento */}
+                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
+                      <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">
+                        2. Documento de Identificação {novoBoletim.eMenor === 'Sim' && novoBoletim.titularDoc === 'Documento do Acompanhante' && '(do Acompanhante Responsável)'}
+                      </h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Tipo de Documento *</label>
+                          <select 
+                            value={novoBoletim.docTipo} 
+                            onChange={e => setNovoBoletim({...novoBoletim, docTipo: e.target.value})} 
+                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                          >
+                            <option value="Cartão de Cidadão / BI">Cartão de Cidadão / BI</option>
+                            <option value="Passaporte">Passaporte</option>
+                            <option value="Título de Residência">Título de Residência</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Número do Documento *</label>
+                          <input 
+                            type="text" 
+                            placeholder="N.º do Passaporte ou BI" 
+                            value={novoBoletim.docNumero} 
+                            onChange={e => setNovoBoletim({...novoBoletim, docNumero: e.target.value})} 
+                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none font-mono" 
+                            required 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">País Emissor *</label>
+                          <select 
+                            value={novoBoletim.docPais} 
+                            onChange={e => setNovoBoletim({...novoBoletim, docPais: e.target.value})} 
+                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
+                          >
+                            {PAISES.map(p => <option key={p} value={p}>{p}</option>)}
+                          </select>
+                        </div>
                       </div>
-                      <div>Modo de Pagamento: <strong>{ultimoSucesso.modoPagamento}</strong></div>
                     </div>
-                  )}
 
-                  {ultimoSucesso.funcionarioRececao && (
-                    <div className="text-[10px] text-slate-500 pt-1 text-right">
-                      Atendido por: <strong>{ultimoSucesso.funcionarioRececao}</strong>
-                    </div>
-                  )}
-                </div>
+                    {/* 3. Estadia & Valores Financeiros na Mesma Linha */}
+                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
+                      <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">3. Período da Estadia & Pagamentos</h3>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Data de Entrada (Check-in) *</label>
+                          <input 
+                            type="date" 
+                            value={novoBoletim.dataEntrada} 
+                            onChange={e => setNovoBoletim({...novoBoletim, dataEntrada: e.target.value})} 
+                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none" 
+                            required 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Data Prevista de Saída (Check-out) *</label>
+                          <input 
+                            type="date" 
+                            value={novoBoletim.dataSaida} 
+                            onChange={e => setNovoBoletim({...novoBoletim, dataSaida: e.target.value})} 
+                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none" 
+                            required 
+                          />
+                        </div>
+                      </div>
 
-                <div className="flex gap-3 pt-2 border-t">
-                  <button 
-                    onClick={handlePrintBoletim}
-                    className="flex-1 bg-slate-800 hover:bg-slate-900 text-white font-bold py-2.5 rounded-lg transition text-xs flex items-center justify-center gap-1.5"
-                  >
-                    🖨️ Imprimir Boletim (PDF / Papel)
-                  </button>
-                  <button 
-                    onClick={() => setUltimoSucesso(null)}
-                    className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold px-4 py-2.5 rounded-lg transition text-xs"
-                  >
-                    Fechar
-                  </button>
-                </div>
-
-              </div>
-            </div>
-          )}
-
-        </div>
-      );
-    }
-
-    ReactDOM.createRoot(document.getElementById('root')).render(<CheckInAIMA />);
-  </script>
-</body>
-</html>
+                      {/* VALOR RESERVA, TAXA TURÍSTICA E MODO PAGAMENTO NA MESMA LINHA */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                        <div>
+                          <label className="block text-xs font-semibold text-emerald-800 mb-1">Valor Reserva (€)</label>
+                          <input 
+                            type="number" 
+                            step="0.01"
+                            placeholder="Ex: 150.00" 
+                            value={novoBoletim.valorReserva}
