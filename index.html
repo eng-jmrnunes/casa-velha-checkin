@@ -170,58 +170,118 @@
         return str.slice(0, 10);
       };
 
-      const formatarMoedaLimpa = (val) => {
+      // Limpa valores de moeda como "1 400,00 €", "900,00 €" ou "14.00"
+      const formatarMoedaAvançada = (val) => {
         if (val === undefined || val === null || val === '') return '0.00';
-        const num = parseFloat(String(val).replace(',', '.'));
+        let str = String(val).replace('€', '').replace(/\s+/g, '').trim();
+        str = str.replace(',', '.');
+        const num = parseFloat(str);
         return isNaN(num) ? '0.00' : num.toFixed(2);
       };
 
-      // Leitor universal insensível a maiúsculas, minúsculas, sublinhados e espaços
-      const extrairPropriedadeUltraRobusta = (obj, aliases) => {
-        if (!obj) return '';
-        const keys = Object.keys(obj);
+      // Extrator universal tolerante a ausência de colunas e nomes variados
+      const lerCampoTabela = (r, nomesPossiveis) => {
+        if (!r) return '';
         
-        for (let alias of aliases) {
-          const aliasClean = alias.toLowerCase().replace(/[^a-z0-9]/g, '');
-          const matchKey = keys.find(k => k.toLowerCase().replace(/[^a-z0-9]/g, '') === aliasClean);
+        // Se a linha vier como Array
+        if (Array.isArray(r)) {
+          return '';
+        }
+
+        const keys = Object.keys(r);
+        for (let nome of nomesPossiveis) {
+          const nomeClean = nome.toLowerCase().replace(/[^a-z0-9]/g, '');
+          const matchKey = keys.find(k => k.toLowerCase().replace(/[^a-z0-9]/g, '') === nomeClean);
           
-          if (matchKey && obj[matchKey] !== undefined && obj[matchKey] !== null && String(obj[matchKey]).trim() !== '') {
-            return String(obj[matchKey]).trim();
+          if (matchKey && r[matchKey] !== undefined && r[matchKey] !== null && String(r[matchKey]).trim() !== '') {
+            return String(r[matchKey]).trim();
           }
         }
         return '';
       };
 
-      const mapearLinhaParaObjetoBoletim = (r) => {
-        const idBoletim = extrairPropriedadeUltraRobusta(r, ['ID_Boletim', 'idBoletim', 'id']) || 'CV-HIST';
-        const nome = extrairPropriedadeUltraRobusta(r, ['Nome', 'nome', 'hospede', 'nomecompleto']);
-        const dataNascimento = formatarDataLimpa(extrairPropriedadeUltraRobusta(r, ['Data_Nascimento', 'dataNascimento', 'nascimento', 'datanasc']));
-        const nacionalidade = extrairPropriedadeUltraRobusta(r, ['Nacionalidade', 'nacionalidade']) || 'Portugal';
-        const docTipo = extrairPropriedadeUltraRobusta(r, ['Tipo_Documento', 'docTipo', 'tipodocumento', 'tipodoc']) || 'Cartão de Cidadão / BI';
-        const docNumero = extrairPropriedadeUltraRobusta(r, ['Numero_Documento', 'docNumero', 'numerodocumento', 'numdoc']);
-        const docPais = extrairPropriedadeUltraRobusta(r, ['Pais_Emissor', 'docPais', 'paisemissor']) || 'Portugal';
-        const paisResidencia = extrairPropriedadeUltraRobusta(r, ['Pais_Residencia', 'paisResidencia', 'paisresidencia']) || 'Portugal';
+      const processarLinhaRecebida = (r) => {
+        // Se o Google Apps Script enviar o registo como uma lista simples de valores [val1, val2, ...]
+        if (Array.isArray(r)) {
+          const idBoletim = r[0] || 'CV-HIST';
+          const nome = r[2] || '';
+          const dataNascimento = formatarDataLimpa(r[3] || '');
+          const nacionalidade = r[4] || 'Portugal';
+          const docTipo = r[5] || 'Cartão de Cidadão / BI';
+          const docNumero = r[6] || '';
+          const docPais = r[7] || 'Portugal';
+          const paisResidencia = r[8] || 'Portugal';
+          const dataEntrada = formatarDataLimpa(r[9] || '');
+          const dataSaida = formatarDataLimpa(r[10] || '');
+          const tipoAlojamento = r[11] || 'Quarto Duplo com Vista Mar';
+          const numeroUnidade = r[12] || '1';
+          const eMenor = r[13] || 'Não';
+          const titularDoc = r[14] || 'Próprio';
+          const qualidadeAcompanhante = r[15] || 'N/A';
+          const valorReserva = formatarMoedaAvançada(r[16]);
+          const taxaTuristica = formatarMoedaAvançada(r[17]);
+          const modoPagamento = r[18] || 'Numerário';
+          const funcRececao = r[19] || selectedFuncObj.nome;
+
+          let funcId = '';
+          if (funcRececao && funcRececao.includes('[') && funcRececao.includes(']')) {
+            funcId = funcRececao.split('[')[1].split(']')[0];
+          }
+
+          return {
+            rowIndex: r.rowIndex || 0,
+            idBoletim,
+            nome,
+            dataNascimento,
+            nacionalidade,
+            paisResidencia,
+            docTipo,
+            docNumero,
+            docPais,
+            tipoAlojamento,
+            numeroUnidade,
+            dataEntrada,
+            dataSaida,
+            noitesCalculadas: calcularDiferencaNoites(dataEntrada, dataSaida),
+            eMenor,
+            titularDoc,
+            qualidadeAcompanhante,
+            valorReserva,
+            taxaTuristica,
+            modoPagamento,
+            funcionarioNome: funcRececao,
+            funcionarioId: funcId || selectedFuncObj.id || ''
+          };
+        }
+
+        // Se vier como Objeto com nomes de colunas
+        const idBoletim = lerCampoTabela(r, ['ID_Boletim', 'idBoletim', 'id']) || 'CV-HIST';
+        const nome = lerCampoTabela(r, ['Nome', 'nome', 'hospede']);
+        const dataNascimento = formatarDataLimpa(lerCampoTabela(r, ['Data_Nascimento', 'dataNascimento', 'nascimento']));
+        const nacionalidade = lerCampoTabela(r, ['Nacionalidade', 'nacionalidade']) || 'Portugal';
+        const docTipo = lerCampoTabela(r, ['Tipo_Documento', 'docTipo', 'tipodocumento']) || 'Cartão de Cidadão / BI';
+        const docNumero = lerCampoTabela(r, ['Numero_Documento', 'docNumero', 'numerodocumento']);
+        const docPais = lerCampoTabela(r, ['Pais_Emissor', 'docPais', 'paisemissor']) || 'Portugal';
+        const paisResidencia = lerCampoTabela(r, ['Pais_Residencia', 'paisResidencia', 'paisresidencia']) || 'Portugal';
         
-        const dataEntrada = formatarDataLimpa(extrairPropriedadeUltraRobusta(r, ['Check_In', 'checkin', 'dataEntrada', 'dataCheckin', 'entrada']));
-        const dataSaida = formatarDataLimpa(extrairPropriedadeUltraRobusta(r, ['Check_Out', 'checkout', 'dataSaida', 'dataCheckout', 'saida']));
+        const dataEntrada = formatarDataLimpa(lerCampoTabela(r, ['Check_In', 'dataEntrada', 'dataCheckin', 'checkin']));
+        const dataSaida = formatarDataLimpa(lerCampoTabela(r, ['Check_Out', 'dataSaida', 'dataCheckout', 'checkout']));
         
-        const tipoAlojamento = extrairPropriedadeUltraRobusta(r, ['Tipo_Alojamento', 'tipoAlojamento', 'alojamento']) || 'Quarto Duplo com Vista Mar';
-        const numeroUnidade = extrairPropriedadeUltraRobusta(r, ['Numero_Unidade', 'numeroUnidade', 'unidade']) || '1';
-        const eMenor = extrairPropriedadeUltraRobusta(r, ['E_Menor', 'eMenor', 'menor']) || 'Não';
-        const titularDoc = extrairPropriedadeUltraRobusta(r, ['Titular_Documento', 'titularDoc', 'titular']) || 'Próprio';
-        const qualidadeAcompanhante = extrairPropriedadeUltraRobusta(r, ['Qualidade_Acompanhante', 'qualidadeAcompanhante', 'acompanhante']) || 'N/A';
+        const tipoAlojamento = lerCampoTabela(r, ['Tipo_Alojamento', 'tipoAlojamento', 'alojamento']) || 'Quarto Duplo com Vista Mar';
+        const numeroUnidade = lerCampoTabela(r, ['Numero_Unidade', 'numeroUnidade', 'unidade']) || '1';
+        const eMenor = lerCampoTabela(r, ['E_Menor', 'eMenor', 'menor']) || 'Não';
+        const titularDoc = lerCampoTabela(r, ['Titular_Documento', 'titularDoc', 'titular']) || 'Próprio';
+        const qualidadeAcompanhante = lerCampoTabela(r, ['Qualidade_Acompanhante', 'qualidadeAcompanhante', 'acompanhante']) || 'N/A';
         
-        const valorReserva = formatarMoedaLimpa(extrairPropriedadeUltraRobusta(r, ['Valor_Reserva', 'valorReserva', 'reserva']));
-        const taxaTuristica = formatarMoedaLimpa(extrairPropriedadeUltraRobusta(r, ['Taxa_Turistica', 'taxaTuristica', 'taxa']));
-        const modoPagamento = extrairPropriedadeUltraRobusta(r, ['Modo_Pagamento', 'modoPagamento', 'pagamento']) || 'Numerário';
-        const funcRececao = extrairPropriedadeUltraRobusta(r, ['Funcionario_Rececao', 'funcionarioRececao', 'funcionario', 'operador']) || selectedFuncObj.nome;
+        const valorReserva = formatarMoedaAvançada(lerCampoTabela(r, ['Valor_Reserva', 'valorReserva', 'reserva']));
+        const taxaTuristica = formatarMoedaAvançada(lerCampoTabela(r, ['Taxa_Turistica', 'taxaTuristica', 'taxa']));
+        const modoPagamento = lerCampoTabela(r, ['Modo_Pagamento', 'modoPagamento', 'pagamento']) || 'Numerário';
+        const funcRececao = lerCampoTabela(r, ['Funcionario_Rececao', 'funcionarioRececao', 'funcionario']) || selectedFuncObj.nome;
 
         let funcId = '';
         if (funcRececao && funcRececao.includes('[') && funcRececao.includes(']')) {
           funcId = funcRececao.split('[')[1].split(']')[0];
         }
-
-        const noites = calcularDiferencaNoites(dataEntrada, dataSaida);
 
         return {
           rowIndex: r.rowIndex,
@@ -237,7 +297,7 @@
           numeroUnidade,
           dataEntrada,
           dataSaida,
-          noitesCalculadas: noites,
+          noitesCalculadas: calcularDiferencaNoites(dataEntrada, dataSaida),
           eMenor,
           titularDoc,
           qualidadeAcompanhante,
@@ -284,7 +344,7 @@
 
             if (result.status === "success" && result.data && result.data.length > 0) {
               const ultimoRaw = result.data[result.data.length - 1];
-              const norm = mapearLinhaParaObjetoBoletim(ultimoRaw);
+              const norm = processarLinhaRecebida(ultimoRaw);
               const totalEstadias = result.data.length;
 
               setAlertaRecorrente({
@@ -457,7 +517,7 @@
           const result = await response.json();
 
           if (result.status === "success") {
-            const listMapeada = (result.data || []).map(r => mapearLinhaParaObjetoBoletim(r));
+            const listMapeada = (result.data || []).map(r => processarLinhaRecebida(r));
             setSearchResults(listMapeada);
 
             if (listMapeada.length === 0) {
