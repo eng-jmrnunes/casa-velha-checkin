@@ -86,7 +86,6 @@
       const [exportDataInicio, setExportDataInicio] = useState(todayStr);
       const [exportDataFim, setExportDataFim] = useState(todayStr);
 
-      // Efeito para calcular a idade e detetar menoridade automaticamente
       useEffect(() => {
         if (!novoBoletim.dataNascimento) {
           setIdadeCalculada(null);
@@ -245,6 +244,7 @@
         }
       };
 
+      // EXPORTAÇÃO .CSV COMPATÍVEL 100% COM AIMA/SIBA
       const handleExportCSV = async (e) => {
         e.preventDefault();
         setExporting(true);
@@ -271,18 +271,19 @@
               return;
             }
 
+            // Apenas os 9 cabeçalhos oficiais da AIMA/SIBA
             let csvContent = "data:text/csv;charset=utf-8,";
-            csvContent += "ID_Boletim,Nome_Completo,Data_Nascimento,Nacionalidade,Tipo_Documento,Numero_Documento,Pais_Emissor,Pais_Residencia,Check_In,Check_Out_Previsto,Tipo_Alojamento,Numero_Unidade,E_Menor,Titular_Documento,Qualidade_Acompanhante\n";
+            csvContent += "Nome_Completo,Data_Nascimento,Nacionalidade,Tipo_Documento,Numero_Documento,Pais_Emissor,Pais_Residencia,Data_Entrada,Data_Saida_Prevista\n";
 
             list.forEach(h => {
-              const row = `"${h.idBoletim}","${h.nome}","${h.dataNascimento}","${h.nacionalidade}","${h.docTipo}","${h.docNumero}","${h.docPais}","${h.paisResidencia}","${h.dataEntrada}","${h.dataSaida}","${h.tipoAlojamento}","${h.numeroUnidade}","${h.eMenor}","${h.titularDoc}","${h.qualidadeAcompanhante}"`;
+              const row = `"${h.nome}","${h.dataNascimento}","${h.nacionalidade}","${h.docTipo}","${h.docNumero}","${h.docPais}","${h.paisResidencia}","${h.dataEntrada}","${h.dataSaida}"`;
               csvContent += row + "\n";
             });
 
             const encodedUri = encodeURI(csvContent);
             const link = document.createElement("a");
             link.setAttribute("href", encodedUri);
-            link.setAttribute("download", `AIMA_SIBA_CasaVelha_${exportDataInicio}_a_${exportDataFim}.csv`);
+            link.setAttribute("download", `Boletins_AIMA_SIBA_CasaVelha_${exportDataInicio}_a_${exportDataFim}.csv`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
