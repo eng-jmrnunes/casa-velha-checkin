@@ -56,7 +56,6 @@
       const [loading, setLoading] = useState(false);
       const [exporting, setExporting] = useState(false);
       
-      // Estado para pesquisa e alteração de check-out
       const [searchQuery, setSearchQuery] = useState('');
       const [searchResults, setSearchResults] = useState([]);
       const [searching, setSearching] = useState(false);
@@ -82,7 +81,11 @@
       const [exportDataInicio, setExportDataInicio] = useState(todayStr);
       const [exportDataFim, setExportDataFim] = useState(todayStr);
 
-      // Função para gerar um ID Único de Boletim
+      const formatarDataLimpa = (dStr) => {
+        if (!dStr) return '';
+        return String(dStr).slice(0, 10);
+      };
+
       const gerarIDBoletim = () => {
         const d = new Date();
         const datePart = d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
@@ -133,7 +136,6 @@
         }
       };
 
-      // Pesquisar hóspedes gravados
       const handleSearch = async (e) => {
         e.preventDefault();
         if (!searchQuery.trim()) return;
@@ -162,7 +164,6 @@
         }
       };
 
-      // Guardar alteração da data de check-out
       const handleUpdateCheckout = async () => {
         if (!novaDataSaida || novaDataSaida <= editingRegisto.dataEntrada) {
           alert('A nova data de saída deve ser posterior à data de check-in.');
@@ -293,10 +294,10 @@
                       <div>
                         <div className="font-bold text-slate-900">{r.nome} <span className="text-blue-600 font-mono">({r.idBoletim})</span></div>
                         <div className="text-slate-500">{r.docTipo}: {r.docNumero} | {r.tipoAlojamento} (Unidade {r.numeroUnidade})</div>
-                        <div className="text-slate-700 font-medium">Entrada: {r.dataEntrada} $\rightarrow$ Saída Atual: <span className="text-amber-700 font-bold">{r.dataSaida}</span></div>
+                        <div className="text-slate-700 font-medium">Entrada: {formatarDataLimpa(r.dataEntrada)} → Saída Atual: <span className="text-amber-700 font-bold">{formatarDataLimpa(r.dataSaida)}</span></div>
                       </div>
                       <button 
-                        onClick={() => { setEditingRegisto(r); setNovaDataSaida(r.dataSaida); }} 
+                        onClick={() => { setEditingRegisto(r); setNovaDataSaida(formatarDataLimpa(r.dataSaida)); }} 
                         className="bg-amber-600 hover:bg-amber-700 text-white font-semibold px-3 py-1.5 rounded"
                       >
                         Alterar Check-out
