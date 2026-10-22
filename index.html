@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Casa Velha - Terminal de Check-in</title>
+  <title>Casa Velha - Terminal de Check-in & AIMA</title>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -18,7 +18,6 @@
     // ⚠️ COLE AQUI O SEU LINK DO GOOGLE APPS SCRIPT
     const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzZitsCHoHUdgDwb2g8OrJEUm6tkXob-XhiywGuRt2ZAIPH9pwTWVvXGc2hQzA4psfbTg/exec";
 
-    // Lista Completa de Países (Ordem Alfabética)
     const PAISES = [
       "Espanha", "Alemanha", "França", "Reino Unido", "Itália", "Holanda", "Brasil", "Estados Unidos",
       "Afeganistão", "África do Sul", "Albânia", "Andorra", "Angola", "Antígua e Barbuda", "Arábia Saudita", 
@@ -48,6 +47,9 @@
 
     function CheckInAIMA() {
       const [loading, setLoading] = useState(false);
+      const [exporting, setExporting] = useState(false);
+
+      // Estado do formulário de check-in
       const [novoBoletim, setNovoBoletim] = useState({
         nome: '',
         dataNascimento: '',
@@ -61,16 +63,16 @@
         quarto: 'Quarto Duplo com Vista Mar'
       });
 
+      // Estado do filtro de exportação .CSV
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const [exportDataInicio, setExportDataInicio] = useState(todayStr);
+      const [exportDataFim, setExportDataFim] = useState(todayStr);
+
       const handleSubmit = async (e) => {
         e.preventDefault();
 
         if (!novoBoletim.nome || !novoBoletim.docNumero || !novoBoletim.dataEntrada || !novoBoletim.dataSaida) {
           alert('Por favor, preencha todos os campos obrigatórios (*).');
-          return;
-        }
-
-        if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.includes("SEU_URL_DO_GOOGLE_APPS_SCRIPT_AQUI")) {
-          alert('Erro de configuração: O link do Google Apps Script não foi definido.');
           return;
         }
 
@@ -84,9 +86,8 @@
             body: JSON.stringify(novoBoletim)
           });
 
-          alert('✅ Boletim registado com sucesso no Google Drive!');
+          alert('✅ Boletim registado com sucesso no sistema!');
 
-          // Limpar formulário para o próximo hóspede
           setNovoBoletim({
             nome: '',
             dataNascimento: '',
@@ -106,6 +107,62 @@
         }
       };
 
+      // Função para gerar e descarregar o ficheiro .CSV por filtro de datas
+      const handleExportCSV = async (e) => {
+        e.preventDefault();
+        setExporting(true);
+
+        try {
+          const response = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({
+              action: "EXPORT_CSV",
+              startDate: exportDataInicio,
+              endDate: exportDataFim
+            })
+          });
+
+          const result = await response.json();
+
+          if (result.status === "success") {
+            const list = result.data;
+
+            if (!list || list.length === 0) {
+              alert(`Nenhum registo de hóspede encontrado entre ${exportDataInicio} e ${exportDataFim}.`);
+              setExporting(false);
+              return;
+            }
+
+            // Construir o conteúdo .CSV
+            let csvContent = "data:text/csv;charset=utf-8,";
+            csvContent += "Nome_Completo,Data_Nascimento,Nacionalidade,Tipo_Documento,Numero_Documento,Pais_Emissor,Pais_Residencia,Check_In,Check_Out,Quarto\n";
+
+            list.forEach(h => {
+              const row = `"${h.nome}","${h.dataNascimento}","${h.nacionalidade}","${h.docTipo}","${h.docNumero}","${h.docPais}","${h.paisResidencia}","${h.dataEntrada}","${h.dataSaida}","${h.quarto}"`;
+              csvContent += row + "\n";
+            });
+
+            // Descarregar automaticamente para o computador
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `AIMA_SIBA_CasaVelha_${exportDataInicio}_a_${exportDataFim}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            alert(`✅ Ficheiro .CSV gerado com sucesso! (${list.length} hóspede(s) exportado(s)).`);
+          } else {
+            alert('Erro ao obter dados: ' + result.message);
+          }
+        } catch (error) {
+          alert('❌ Erro ao comunicar com a base de dados. Tente novamente.');
+        } finally {
+          setExporting(false);
+        }
+      };
+
       return (
         <div className="min-h-screen pb-12">
           <header className="bg-slate-900 text-white p-4 shadow-md">
@@ -120,11 +177,55 @@
             </div>
           </header>
 
-          <main className="max-w-3xl mx-auto p-4 mt-4">
+          <main className="max-w-3xl mx-auto p-4 mt-4 space-y-6">
+            
+            {/* NOVO PAINEL DE EXPORTAÇÃO .CSV POR SELEÇÃO DE DATAS */}
+            <div className="bg-amber-50 p-5 rounded-xl border border-amber-200 shadow-sm space-y-3">
+              <div className="flex items-center justify-between border-b border-amber-200 pb-2">
+                <h2 className="text-sm font-bold text-amber-900 flex items-center gap-2">
+                  📥 Gerar & Descarregar Ficheiro .CSV para a AIMA
+                </h2>
+                <span className="text-xs bg-amber-200 text-amber-900 font-semibold px-2 py-0.5 rounded">
+                  Filtro por Datas
+                </span>
+              </div>
+              
+              <form onSubmit={handleExportCSV} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end text-xs">
+                <div>
+                  <label className="block font-semibold text-amber-900 mb-1">Data Início Check-in</label>
+                  <input 
+                    type="date" 
+                    value={exportDataInicio} 
+                    onChange={e => setExportDataInicio(e.target.value)} 
+                    className="w-full border border-amber-300 p-2 rounded bg-white font-medium" 
+                    required 
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-amber-900 mb-1">Data Fim Check-in</label>
+                  <input 
+                    type="date" 
+                    value={exportDataFim} 
+                    onChange={e => setExportDataFim(e.target.value)} 
+                    className="w-full border border-amber-300 p-2 rounded bg-white font-medium" 
+                    required 
+                  />
+                </div>
+                <button 
+                  type="submit" 
+                  disabled={exporting}
+                  className="bg-amber-700 hover:bg-amber-800 text-white font-bold p-2.5 rounded transition shadow text-xs flex items-center justify-center gap-1 disabled:bg-slate-400"
+                >
+                  {exporting ? 'A Gerar .CSV...' : '📄 Descarregar .CSV'}
+                </button>
+              </form>
+            </div>
+
+            {/* FORMULÁRIO DE REGISTO DE HÓSPEDE */}
             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
               <div className="border-b pb-3">
                 <h2 className="text-lg font-bold text-slate-800">📋 Novo Boletim de Alojamento</h2>
-                <p className="text-xs text-slate-500">Selecione os países das listas suspensas (195 países disponíveis).</p>
+                <p className="text-xs text-slate-500">Introduza os dados de identificação do hóspede estrangeiro.</p>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4 text-sm">
