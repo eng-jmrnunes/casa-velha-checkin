@@ -90,7 +90,11 @@
       const [showSobreModal, setShowSobreModal] = useState(false);
       const [showBoletimForm, setShowBoletimForm] = useState(true);
 
-      // Estado para Deteção de Hóspede Recorrente
+      // Proteção de Exportação CSV (Gestor)
+      const [csvPasswordInput, setCsvPasswordInput] = useState('');
+      const [csvUnlocked, setCsvUnlocked] = useState(false);
+
+      // Deteção de Hóspede Recorrente
       const [alertaRecorrente, setAlertaRecorrente] = useState(null);
       const [verificandoDoc, setVerificandoDoc] = useState(false);
 
@@ -128,7 +132,6 @@
       const [exportDataInicio, setExportDataInicio] = useState(todayStr);
       const [exportDataFim, setExportDataFim] = useState(todayStr);
 
-      // Duração da Estadia em Noites
       const [numeroNoites, setNumeroNoites] = useState(0);
 
       const calcularDiferencaNoites = (d1Str, d2Str) => {
@@ -144,7 +147,6 @@
         setNumeroNoites(calcularDiferencaNoites(novoBoletim.dataEntrada, novoBoletim.dataSaida));
       }, [novoBoletim.dataEntrada, novoBoletim.dataSaida]);
 
-      // Cálculo e Regras da Taxa Turística de Matosinhos
       const noitesTributaveis = Math.min(numeroNoites, 7);
       const taxaSugeridaMatosinhos = (idadeCalculada !== null && idadeCalculada < 16) 
         ? 0 
@@ -153,7 +155,6 @@
       const valorTaxaNum = Number(novoBoletim.taxaTuristica || 0);
       const menorComTaxaIncorreta = idadeCalculada !== null && idadeCalculada < 16 && valorTaxaNum > 0;
       const taxaExcedeLimiteMaximo = valorTaxaNum > 14;
-
       const taxaComAvisoErro = menorComTaxaIncorreta || taxaExcedeLimiteMaximo;
 
       useEffect(() => {
@@ -172,7 +173,6 @@
         .catch(() => {});
       }, []);
 
-      // Deteção Automática de Hóspede Recorrente por Documento
       useEffect(() => {
         const docLimpo = (novoBoletim.docNumero || '').trim();
         if (docLimpo.length < 4) {
@@ -242,7 +242,6 @@
         }
       };
 
-      // Recálculo imediato de idade e atualização do valor sugerido da taxa
       useEffect(() => {
         if (!novoBoletim.dataNascimento) {
           setIdadeCalculada(null);
@@ -261,7 +260,6 @@
 
         if (!isNaN(idade)) {
           setIdadeCalculada(idade);
-
           const valorSugerido = idade < 16 ? '0.00' : (Math.min(numeroNoites, 7) * 2).toFixed(2);
           setNovoBoletim(prev => ({ 
             ...prev, 
@@ -322,14 +320,22 @@
           noitesCalculadas: numeroNoites
         };
 
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+
         try {
           await fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
             mode: 'no-cors',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(payload),
+            signal: controller.signal
           });
-
+        } catch (error) {
+          // Ignora timeouts para garantir abertura imediata do comprovativo
+        } finally {
+          clearTimeout(timeoutId);
+          setLoading(false);
           setUltimoSucesso(payload);
 
           setNovoBoletim({
@@ -354,10 +360,6 @@
           setNasceAno('');
           setIdadeCalculada(null);
           setAlertaRecorrente(null);
-        } catch (error) {
-          alert('❌ Erro ao ligar ao servidor. Verifique a ligação à internet.');
-        } finally {
-          setLoading(false);
         }
       };
 
@@ -679,43 +681,7 @@
               )}
             </div>
 
-            {/* PAINEL 2: EXPORTAÇÃO .CSV */}
-            <div className="bg-amber-50 p-5 rounded-xl border border-amber-200 shadow-sm space-y-3">
-              <h2 className="text-sm font-bold text-amber-900">📥 Gerar & Descarregar Ficheiro .CSV para a AIMA</h2>
-              <p className="text-xs text-amber-700">O ficheiro filtrará automaticamente e incluirá <strong>apenas os hóspedes estrangeiros</strong>.</p>
-              
-              <form onSubmit={handleExportCSV} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end text-xs">
-                <div>
-                  <label className="block font-semibold text-amber-900 mb-1">Data Início Check-in</label>
-                  <input 
-                    type="date" 
-                    value={exportDataInicio} 
-                    onChange={e => setExportDataInicio(e.target.value)} 
-                    className="w-full border border-amber-300 p-2 rounded bg-white font-medium" 
-                    required 
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-amber-900 mb-1">Data Fim Check-in</label>
-                  <input 
-                    type="date" 
-                    value={exportDataFim} 
-                    onChange={e => setExportDataFim(e.target.value)} 
-                    className="w-full border border-amber-300 p-2 rounded bg-white font-medium" 
-                    required 
-                  />
-                </div>
-                <button 
-                  type="submit" 
-                  disabled={exporting}
-                  className="bg-amber-700 hover:bg-amber-800 text-white font-bold p-2.5 rounded transition shadow text-xs flex items-center justify-center gap-1 disabled:bg-slate-400"
-                >
-                  {exporting ? 'A Gerar .CSV...' : '📄 Descarregar .CSV (AIMA)'}
-                </button>
-              </form>
-            </div>
-
-            {/* PAINEL 3: NOVO FORMULÁRIO DE CHECK-IN */}
+            {/* PAINEL 2: NOVO FORMULÁRIO DE CHECK-IN */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <div 
                 onClick={() => setShowBoletimForm(!showBoletimForm)}
@@ -1007,7 +973,6 @@
                           </span>
                         </div>
 
-                        {/* AVISO A VERMELHO PARA MENORES DE 16 ANOS COM TAXA > 0€ */}
                         {menorComTaxaIncorreta && (
                           <div className="text-rose-700 font-bold bg-white p-2.5 rounded border border-rose-300 space-y-1">
                             <div className="flex items-center gap-1 text-xs">
@@ -1026,7 +991,6 @@
                           </div>
                         )}
 
-                        {/* AVISO A VERMELHO PARA VALORES SUPERIORES A 14€ */}
                         {taxaExcedeLimiteMaximo && !menorComTaxaIncorreta && (
                           <div className="text-rose-700 font-bold bg-white p-2.5 rounded border border-rose-300 space-y-1">
                             <div className="flex items-center gap-1 text-xs">
@@ -1121,6 +1085,77 @@
                 </div>
               )}
             </div>
+
+            {/* PAINEL 3: EXPORTAÇÃO .CSV (BLOQUEADO E MOVIDO PARA O FINAL DA PÁGINA) */}
+            <div className="bg-amber-50 p-5 rounded-xl border border-amber-300 shadow-sm space-y-3">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h2 className="text-sm font-bold text-amber-900">🔒 Gerador de Ficheiro .CSV para a AIMA (Acesso Restrito)</h2>
+                  <p className="text-xs text-amber-700">Esta área está bloqueada. Introduza a palavra-passe de gestor para desbloquear a exportação.</p>
+                </div>
+                {csvUnlocked && (
+                  <span className="text-[11px] font-bold bg-emerald-200 text-emerald-900 px-2 py-1 rounded">
+                    🔓 Desbloqueado
+                  </span>
+                )}
+              </div>
+
+              {!csvUnlocked ? (
+                <div className="flex gap-2 items-center text-xs pt-1">
+                  <input 
+                    type="password" 
+                    placeholder="Palavra-passe de Gestor..." 
+                    value={csvPasswordInput} 
+                    onChange={e => setCsvPasswordInput(e.target.value)} 
+                    className="border border-amber-300 p-2.5 rounded bg-white font-medium outline-none w-64 focus:ring-2 focus:ring-amber-500" 
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      if (csvPasswordInput === 'casavelha2026') { // Palavra-passe de administrador configurada
+                        setCsvUnlocked(true);
+                      } else {
+                        alert('❌ Palavra-passe incorreta!');
+                      }
+                    }}
+                    className="bg-amber-700 hover:bg-amber-800 text-white font-bold px-4 py-2.5 rounded transition"
+                  >
+                    Desbloquear
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleExportCSV} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end text-xs pt-2">
+                  <div>
+                    <label className="block font-semibold text-amber-900 mb-1">Data Início Check-in</label>
+                    <input 
+                      type="date" 
+                      value={exportDataInicio} 
+                      onChange={e => setExportDataInicio(e.target.value)} 
+                      className="w-full border border-amber-300 p-2 rounded bg-white font-medium" 
+                      required 
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-amber-900 mb-1">Data Fim Check-in</label>
+                    <input 
+                      type="date" 
+                      value={exportDataFim} 
+                      onChange={e => setExportDataFim(e.target.value)} 
+                      className="w-full border border-amber-300 p-2 rounded bg-white font-medium" 
+                      required 
+                    />
+                  </div>
+                  <button 
+                    type="submit" 
+                    disabled={exporting}
+                    className="bg-amber-700 hover:bg-amber-800 text-white font-bold p-2.5 rounded transition shadow text-xs flex items-center justify-center gap-1 disabled:bg-slate-400"
+                  >
+                    {exporting ? 'A Gerar .CSV...' : '📄 Descarregar .CSV (AIMA)'}
+                  </button>
+                </form>
+              )}
+            </div>
+
           </main>
 
           {/* MODAL: SOBRE O ESTABELECIMENTO */}
