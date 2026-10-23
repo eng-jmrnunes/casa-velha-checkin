@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Casa Velha - Gestão & AIMA</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzZitsCHoHUdgDwb2g8OrJEUm6tkXob-XhiywGuRt2ZAIPH9pwTWVvXGc2hQzA4psfbTg/exec";
+
+    // Dados Fixos da Unidade Hoteleira para o Registo de Cabeçalho (Tipo 0)
+    const UH_CONFIG = {
+      nif: "123456789", // Ajustar para o NIF oficial se necessário
+      estabelecimento: "0001",
+      nome: "CASA VELHA ALOJAMENTO LOCAL",
+      morada: "AVENIDA BEIRA MAR 123",
+      localidade: "MATOSINHOS",
+      codPostal: "4450",
+      zonaPostal: "001",
+      telefone: "220000000",
+      fax: "0000000000",
+      contactoNome: "JOSE NUNES",
+      contactoEmail: "geral@casavelha.pt"
+    };
+
+    function AdminPMS() {
+      const [autenticado, setAutenticado] = useState(false);
+      const [pinInput, setPinInput] = useState('');
+      const [erroPin, setErroPin] = useState('');
+
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const [exportDataInicio, setExportDataInicio] = useState(todayStr);
+      const [exportDataFim, setExportDataFim] = useState(todayStr);
+      const [numFicheiroSerie, setNumFicheiroSerie] = useState('00001');
+      const [exporting, setExporting] = useState(false);
+
+      const [registosAlojamento, setRegistosAlojamento] = useState([]);
+      const [loadingData, setLoadingData] = useState(false);
+      const [filtroTexto, setFiltroTexto] = useState('');
+
+      const handleLogin = (e) => {
+        e.preventDefault();
+        if (pinInput === '1234' || pinInput === 'casa-velha-admin') {
+          setAutenticado(true);
+          setErroPin('');
+          carregarTodosRegistos();
+        } else {
+          setErroPin('Acesso negado. Palavra-passe incorreta.');
+        }
+      };
+
+      const carregarTodosRegistos = async () => {
+        setLoadingData(true);
+        try {
+          const response = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action: "SEARCH_GUEST", query: "" })
+          });
+          const result = await response.json();
+          if (result.status === "success") {
+            setRegistosAlojamento(result.data || []);
+          }
+        } catch (err) {
+        } finally {
+          setLoadingData(false);
+        }
+      };
+
+      // Formatação de Datas para AAAAMMDD (Formato estipulado AIMA)
+      const formatarDataAIMA = (dStr) => {
+        if (!dStr) return '';
+        const str = String(dStr).trim();
+        if (str.length >= 10 && str.match(/^\d{4}-\d{2}-\d{2}/)) {
+          return str.slice(0, 10).replace(/-/g, '');
+        }
+        const d = new Date(str);
+        if (!isNaN(d.getTime())) {
+          const ano = d.getFullYear();
+          const mes = String(d.getMonth() + 1).padStart(2, '0');
+          const dia = String(d.getDate()).padStart(2, '0');
+          return `${ano}${mes}${dia}`;
+        }
+        return str.replace(/[^0-9]/g, '').slice(0, 8);
+      };
+
+      // Sanitização de Carateres por tipo de campo AIMA
+      const sanitizarAlfaNome = (txt) => {
+        if (!txt) return '';
+        return String(txt).toUpperCase().replace(/[^A-ZÇÃÁÀÉÊÍÕÔÓÚ'\-\s]/g, '').trimStart().slice(0, 40);
+      };
+
+      const sanitizarAlfaLimitado = (txt, max) => {
+        if (!txt) return '';
+        return String(txt).toUpperCase().replace(/[^A-Z0-9\s\-\'"\.,]/g, '').trim().slice(0, max);
+      };
+
+      const sanitizarAlfaNum = (txt, max) => {
+        if (!txt) return '';
+        return String(txt).toUpperCase().replace(/[^A-Z0-9]/g, '').trim().slice(0, max);
+      };
+
+      // Gerador do Ficheiro .DAT oficial da AIMA
+      const handleExportDAT = async (e) => {
+        e.preventDefault();
+        setExporting(true);
+
+        try {
+          const response = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({
+              action: "EXPORT_CSV",
+              startDate: exportDataInicio,
+              endDate: exportDataFim
+            })
+          });
+
+          const result = await response.json();
+
+          if (result.status === "success") {
+            const list = result.data || [];
+
+            if (list.length === 0) {
+              alert(`Nenhum registo elegível de estrangeiro encontrado entre ${exportDataInicio} e ${exportDataFim}.`);
+              setExporting(false);
+              return;
+            }
+
+            let datLines = [];
+
+            // 1. REGISTO DE CABEÇALHO (TIPO 0)
+            const rec0 = [
+              "0",
+              "BA03",
+              sanitizarAlfaNum(UH_CONFIG.nif, 9).padStart(9, '0'),
+              sanitizarAlfaNum(UH_CONFIG.estabelecimento, 4).padStart(4, '0'),
+              sanitizarAlfaLimitado(UH_CONFIG.nome, 40),
+              sanitizarAlfaLimitado(UH_CONFIG.morada, 40),
+              sanitizarAlfaLimitado(UH_CONFIG.localidade, 30),
+              sanitizarAlfaNum(UH_CONFIG.codPostal, 4).padStart(4, '0'),
+              sanitizarAlfaNum(UH_CONFIG.zonaPostal, 3).padStart(3, '0'),
+              sanitizarAlfaNum(UH_CONFIG.telefone, 10).padStart(10, '0'),
+              sanitizarAlfaNum(UH_CONFIG.fax, 10).padStart(10, '0'),
+              sanitizarAlfaLimitado(UH_CONFIG.contactoNome, 40),
+              String(UH_CONFIG.contactoEmail).trim().slice(0, 140)
+            ].join("|") + "|";
+
+            datLines.push(rec0);
+
+            // 2. REGISTOS DE BOLETIM (TIPO 1)
+            list.forEach(h => {
+              const apelido = sanitizarAlfaNome(h.Apelido || h.apelido || '');
+              const nome = sanitizarAlfaNome(h.Nome || h.nome || '');
+              const nac = sanitizarAlfaNum(h.Nacionalidade || h.nacionalidade || 'PRT', 3);
+              const locNasc = sanitizarAlfaLimitado(h.Local_Nascimento || h.localNascimento || '', 40);
+              const dataNasc = formatarDataAIMA(h.Data_Nascimento || h.dataNascimento || '');
+              const numDoc = sanitizarAlfaNum(h.Numero_Documento || h.docNumero || '', 16);
+              const tipoDoc = sanitizarAlfaNum(h.Tipo_Documento || h.docTipo || 'B', 3);
+              const paisEmissor = sanitizarAlfaNum(h.Pais_Emissor || h.docPais || 'PRT', 3);
+              const paisRes = sanitizarAlfaNum(h.Pais_Residencia || h.paisResidencia || 'PRT', 3);
+              const locRes = sanitizarAlfaLimitado(h.Local_Residencia || h.localResidencia || '', 30);
+              const dtEntrada = formatarDataAIMA(h.Check_In || h.dataEntrada || '');
+              const dtSaida = formatarDataAIMA(h.Check_Out || h.dataSaida || '');
+
+              const rec1 = [
+                "1",
+                apelido,
+                nome,
+                nac,
+                locNasc,
+                dataNasc,
+                numDoc,
+                tipoDoc,
+                paisEmissor,
+                paisRes,
+                locRes,
+                dtEntrada,
+                dtSaida
+              ].join("|") + "|";
+
+              datLines.push(rec1);
+            });
+
+            // 3. REGISTO DE RESUMO (TIPO 9)
+            const totalRegistos = datLines.length + 1; // Inclui o próprio registo 9
+            const dataHojeFormatada = formatarDataAIMA(new Date());
+            const numSerieFormatted = String(numFicheiroSerie).padStart(5, '0');
+
+            const rec9 = [
+              "9",
+              String(totalRegistos).padStart(5, '0'),
+              dataHojeFormatada,
+              numSerieFormatted
+            ].join("|") + "|";
+
+            datLines.push(rec9);
+
+            // GERAÇÃO DO FICHEIRO COM NOMENCLATURA: <NIF><Estabelecimento><NumeroFicheiro>.DAT
+            const nomeFicheiroDAT = `${UH_CONFIG.nif}${UH_CONFIG.estabelecimento}${numSerieFormatted}.DAT`;
+            const datContent = datLines.join("\r\n");
+
+            const blob = new Blob([datContent], { type: "text/plain;charset=utf-8" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = nomeFicheiroDAT;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            alert(`✅ Ficheiro oficial AIMA ${nomeFicheiroDAT} gerado com sucesso!\n\nTotal de registos no ficheiro: ${totalRegistos} (Cabeçalho + ${list.length} Hóspedes + Resumo).`);
+          } else {
+            alert('Erro ao obter dados: ' + result.message);
+          }
+        } catch (error) {
+          alert('❌ Erro ao comunicar com o servidor.');
+        } finally {
+          setExporting(false);
+        }
+      };
+
+      if (!autenticado) {
+        return (
+          <div className="min-h-screen flex items-center justify-center p-4">
+            <div className="bg-slate-800 p-8 rounded-2xl border border-slate-700 shadow-2xl max-w-sm w-full space-y-5">
+              <div className="text-center space-y-1">
+                <div className="text-3xl mb-2">🔐</div>
+                <h1 className="text-xl font-bold text-white">Casa Velha PMS</h1>
+                <p className="text-xs text-slate-400">Área Privada de Gestão & Comunicação AIMA</p>
+              </div>
+
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Palavra-passe de Administrador</label>
+                  <input 
+                    type="password" 
+                    placeholder="Introduza o PIN" 
+                    value={pinInput} 
+                    onChange={e => setPinInput(e.target.value)} 
+                    className="w-full bg-slate-900 border border-slate-600 p-3 rounded-lg text-white font-mono text-center outline-none focus:border-amber-500"
+                    required
+                  />
+                </div>
+
+                {erroPin && (
+                  <p className="text-xs text-rose-400 font-bold text-center">{erroPin}</p>
+                )}
+
+                <button 
+                  type="submit" 
+                  className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 rounded-lg transition text-xs shadow-lg"
+                >
+                  Entrar no Painel Privado
+                </button>
+              </form>
+            </div>
+          </div>
+        );
+      }
+
+      const registosFiltrados = registosAlojamento.filter(r => {
+        if (!filtroTexto.trim()) return true;
+        const q = filtroTexto.toLowerCase();
+        return (
+          String(r.Apelido || '').toLowerCase().includes(q) ||
+          String(r.Nome || '').toLowerCase().includes(q) ||
+          String(r.Numero_Documento || '').toLowerCase().includes(q) ||
+          String(r.ID_Boletim || '').toLowerCase().includes(q)
+        );
+      });
+
+      return (
+        <div className="min-h-screen pb-12">
+          {/* CABEÇALHO PRIVADO */}
+          <header className="bg-slate-950 border-b border-slate-800 p-4">
+            <div className="max-w-6xl mx-auto flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">⚙️</span>
+                <div>
+                  <h1 className="text-lg font-bold text-white">Casa Velha PMS — Painel Privado</h1>
+                  <p className="text-xs text-slate-400">Gestão do Alojamento Local & Ficheiros Oficiais AIMA</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setAutenticado(false)} 
+                className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs px-3 py-1.5 rounded transition"
+              >
+                Sair
+              </button>
+            </div>
+          </header>
+
+          <main className="max-w-6xl mx-auto p-4 mt-6 space-y-8">
+
+            {/* SECTOR 1: GERADOR AIMA .DAT */}
+            <section className="bg-slate-800/80 border border-amber-500/30 p-6 rounded-2xl shadow-xl space-y-4">
+              <div className="flex items-center gap-2 border-b border-slate-700 pb-3">
+                <span className="text-xl">📄</span>
+                <div>
+                  <h2 className="text-base font-bold text-amber-400">Gerador do Ficheiro .DAT para a AIMA</h2>
+                  <p className="text-xs text-slate-300">Exporta os boletins de alojamento com a estrutura oficial de 3 registos (Tipo 0, 1 e 9).</p>
+                </div>
+              </div>
+
+              <form onSubmit={handleExportDAT} className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end text-xs">
+                <div>
+                  <label className="block font-semibold text-slate-300 mb-1">Data Início (Check-in)</label>
+                  <input 
+                    type="date" 
+                    value={exportDataInicio} 
+                    onChange={e => setExportDataInicio(e.target.value)} 
+                    className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-lg text-white font-medium outline-none focus:border-amber-500" 
+                    required 
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-300 mb-1">Data Fim (Check-in)</label>
+                  <input 
+                    type="date" 
+                    value={exportDataFim} 
+                    onChange={e => setExportDataFim(e.target.value)} 
+                    className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-lg text-white font-medium outline-none focus:border-amber-500" 
+                    required 
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-300 mb-1">N.º Série Ficheiro</label>
+                  <input 
+                    type="number" 
+                    value={numFicheiroSerie} 
+                    onChange={e => setNumFicheiroSerie(e.target.value)} 
+                    className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-lg text-white font-mono text-center outline-none focus:border-amber-500" 
+                    min="1"
+                    max="99999"
+                    required 
+                  />
+                </div>
+                <button 
+                  type="submit" 
+                  disabled={exporting}
+                  className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 rounded-lg transition shadow flex items-center justify-center gap-2 disabled:bg-slate-700"
+                >
+                  {exporting ? 'A Gerar...' : '📄 Descarregar .DAT (AIMA)'}
+                </button>
+              </form>
+            </section>
+
+            {/* SECTOR 2: HISTÓRICO COMPLETO DE REGISTOS */}
+            <section className="bg-slate-800/80 border border-slate-700 p-6 rounded-2xl shadow-xl space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-700 pb-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">📊</span>
+                  <div>
+                    <h2 className="text-base font-bold text-white">Histórico Geral de Registos de Alojamento</h2>
+                    <p className="text-xs text-slate-400">Total acumulado na base de dados: {registosAlojamento.length} registo(s)</p>
+                  </div>
+                </div>
+                <div className="flex gap-2 w-full sm:w-auto">
+                  <input 
+                    type="text" 
+                    placeholder="Filtrar por nome, doc ou ID..." 
+                    value={filtroTexto}
+                    onChange={e => setFiltroTexto(e.target.value)}
+                    className="bg-slate-900 border border-slate-700 px-3 py-1.5 rounded text-xs text-white outline-none w-full sm:w-64"
+                  />
+                  <button 
+                    onClick={carregarTodosRegistos}
+                    className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded text-xs"
+                  >
+                    🔄
+                  </button>
+                </div>
+              </div>
+
+              {loadingData ? (
+                <div className="text-center py-8 text-xs text-slate-400">A carregar a base de dados...</div>
+              ) : registosFiltrados.length === 0 ? (
+                <div className="text-center py-8 text-xs text-slate-500">Nenhum registo encontrado.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs divide-y divide-slate-700">
+                    <thead className="bg-slate-900 text-slate-400 font-semibold uppercase">
+                      <tr>
+                        <th className="p-2.5">ID Boletim</th>
+                        <th className="p-2.5">Hóspede (Apelido, Nome)</th>
+                        <th className="p-2.5">ICAO</th>
+                        <th className="p-2.5">Documento</th>
+                        <th className="p-2.5">Check-in</th>
+                        <th className="p-2.5">Check-out</th>
+                        <th className="p-2.5">Reserva / Modo</th>
+                        <th className="p-2.5">Taxa Turística</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-700/50">
+                      {registosFiltrados.map((r, idx) => (
+                        <tr key={idx} className="hover:bg-slate-700/30">
+                          <td className="p-2.5 font-mono text-amber-400">{r.ID_Boletim || '-'}</td>
+                          <td className="p-2.5 font-bold text-white">
+                            {r.Apelido || r.apelido ? `${r.Apelido || r.apelido}, ${r.Nome || r.nome}` : r.Nome}
+                          </td>
+                          <td className="p-2.5 font-mono">{r.Nacionalidade || r.nacionalidade}</td>
+                          <td className="p-2.5 font-mono">{r.Tipo_Documento || r.docTipo}: {r.Numero_Documento || r.docNumero}</td>
+                          <td className="p-2.5">{r.Check_In || r.Data_Entrada}</td>
+                          <td className="p-2.5 text-amber-300 font-semibold">{r.Check_Out || r.Data_Saida}</td>
+                          <td className="p-2.5">{r.Numero_Reserva || 'sem reserva'} <span className="text-slate-500">({r.Plataforma_Reserva || '-'})</span></td>
+                          <td className="p-2.5 font-bold text-emerald-400">{r.Taxa_Turistica || '0.00 €'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+
+          </main>
+        </div>
