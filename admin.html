@@ -8,6 +8,13 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Forçar a exibição do ícone do calendário no input date */
+    input[type="date"]::-webkit-calendar-picker-indicator {
+      cursor: pointer;
+      filter: invert(0.8);
+    }
+  </style>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen">
   <div id="root"></div>
@@ -32,6 +39,23 @@
       contactoEmail: "casavelha.alojamentolocal@gmail.com"
     };
 
+    // Função de auxílio para formatar datas estritamente no formato AAAA-MM-DD
+    const formatarDataIso = (dStr) => {
+      if (!dStr) return '-';
+      const str = String(dStr).trim();
+      if (str.length >= 10 && str.match(/^\d{4}-\d{2}-\d{2}/)) {
+        return str.slice(0, 10);
+      }
+      const d = new Date(str);
+      if (!isNaN(d.getTime())) {
+        const ano = d.getFullYear();
+        const mes = String(d.getMonth() + 1).padStart(2, '0');
+        const dia = String(d.getDate()).padStart(2, '0');
+        return `${ano}-${mes}-${dia}`;
+      }
+      return str.slice(0, 10);
+    };
+
     function AdminPMS() {
       const [autenticado, setAutenticado] = useState(false);
       const [pinInput, setPinInput] = useState('');
@@ -41,8 +65,13 @@
       const [exportDataInicio, setExportDataInicio] = useState(todayStr);
       const [exportDataFim, setExportDataFim] = useState(todayStr);
       const [numFicheiroSerie, setNumFicheiroSerie] = useState('00001');
+
+      // Tabela de Preparação para AIMA
+      const [estrangeirosAIMA, setEstrangeirosAIMA] = useState([]);
+      const [carregandoEstrangeiros, setCarregandoEstrangeiros] = useState(false);
       const [exporting, setExporting] = useState(false);
 
+      // Tabela do Histórico Geral (Nacionais e Estrangeiros)
       const [registosAlojamento, setRegistosAlojamento] = useState([]);
       const [loadingData, setLoadingData] = useState(false);
       const [filtroTexto, setFiltroTexto] = useState('');
@@ -58,6 +87,7 @@
         }
       };
 
+      // Carrega rigorosamente TODOS os registos (Nacionais e Estrangeiros)
       const carregarTodosRegistos = async () => {
         setLoadingData(true);
         try {
@@ -74,6 +104,78 @@
         } finally {
           setLoadingData(false);
         }
+      };
+
+      // Procura e filtra apenas HÓSPEDES ESTRANGEIROS no intervalo de check-in definido
+      const handleProcurarEstrangeirosAIMA = async (e) => {
+        e.preventDefault();
+        if (!exportDataInicio || !exportDataFim) {
+          alert("Por favor selecione a data de início e de fim.");
+          return;
+        }
+
+        setCarregandoEstrangeiros(true);
+        setEstrangeirosAIMA([]);
+
+        try {
+          const response = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({
+              action: "SEARCH_GUEST",
+              query: ""
+            })
+          });
+
+          const result = await response.json();
+
+          if (result.status === "success") {
+            const todos = result.data || [];
+            
+            const start = new Date(exportDataInicio);
+            const end = new Date(exportDataFim);
+            end.setHours(23, 59, 59);
+
+            // Filtro: Check-in dentro do intervalo E Nacionalidade diferente de PRT / Portugal
+            const filtrados = todos.filter(h => {
+              const checkInStr = h.Check_In || h.Data_Entrada || h[12];
+              const nac = String(h.Nacionalidade || h.nacionalidade || h[5] || '').toUpperCase().trim();
+
+              const eEstrangeiro = nac !== 'PRT' && nac !== 'PORTUGAL' && nac !== '';
+
+              if (checkInStr && eEstrangeiro) {
+                const dtIn = new Date(checkInStr);
+                return dtIn >= start && dtIn <= end;
+              }
+              return false;
+            }).map((h, index) => ({
+              ...h,
+              _tempId: index,
+              _selecionado: true // Por defeito vêm selecionados para exportação
+            }));
+
+            setEstrangeirosAIMA(filtrados);
+
+            if (filtrados.length === 0) {
+              alert(`Nenhum registo de estrangeiro encontrado com check-in entre ${exportDataInicio} e ${exportDataFim}.`);
+            }
+          }
+        } catch (error) {
+          alert("Erro ao procurar registos de estrangeiros.");
+        } finally {
+          setCarregandoEstrangeiros(false);
+        }
+      };
+
+      const toggleSelecaoRegisto = (tempId) => {
+        setEstrangeirosAIMA(prev => prev.map(item => 
+          item._tempId === tempId ? { ...item, _selecionado: !item._selecionado } : item
+        ));
+      };
+
+      const toggleSelecionarTodos = () => {
+        const todosSelecionados = estrangeirosAIMA.every(i => i._selecionado);
+        setEstrangeirosAIMA(prev => prev.map(item => ({ ...item, _selecionado: !todosSelecionados })));
       };
 
       // Formatação de Datas para AAAAMMDD (Formato estipulado AIMA)
@@ -93,7 +195,6 @@
         return str.replace(/[^0-9]/g, '').slice(0, 8);
       };
 
-      // Sanitização de Carateres por tipo de campo AIMA
       const sanitizarAlfaNome = (txt) => {
         if (!txt) return '';
         return String(txt).toUpperCase().replace(/[^A-ZÇÃÁÀÉÊÍÕÔÓÚ'\-\s]/g, '').trimStart().slice(0, 40);
@@ -109,120 +210,102 @@
         return String(txt).toUpperCase().replace(/[^A-Z0-9]/g, '').trim().slice(0, max);
       };
 
-      // Gerador do Ficheiro .DAT oficial da AIMA
-      const handleExportDAT = async (e) => {
-        e.preventDefault();
+      // Gera o ficheiro .DAT usando EXCLUSIVAMENTE os registos selecionados pelo utilizador
+      const handleExportDAT = () => {
+        const selecionados = estrangeirosAIMA.filter(i => i._selecionado);
+
+        if (selecionados.length === 0) {
+          alert("Por favor selecione pelo menos um registo na tabela antes de descarregar o ficheiro.");
+          return;
+        }
+
         setExporting(true);
 
         try {
-          const response = await fetch(GOOGLE_SCRIPT_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({
-              action: "EXPORT_CSV",
-              startDate: exportDataInicio,
-              endDate: exportDataFim
-            })
+          let datLines = [];
+
+          // 1. REGISTO DE CABEÇALHO (TIPO 0)
+          const rec0 = [
+            "0",
+            "BA03",
+            sanitizarAlfaNum(UH_CONFIG.nif, 9).padStart(9, '0'),
+            sanitizarAlfaNum(UH_CONFIG.estabelecimento, 4).padStart(4, '0'),
+            sanitizarAlfaLimitado(UH_CONFIG.nome, 40),
+            sanitizarAlfaLimitado(UH_CONFIG.morada, 40),
+            sanitizarAlfaLimitado(UH_CONFIG.localidade, 30),
+            sanitizarAlfaNum(UH_CONFIG.codPostal, 4).padStart(4, '0'),
+            sanitizarAlfaNum(UH_CONFIG.zonaPostal, 3).padStart(3, '0'),
+            sanitizarAlfaNum(UH_CONFIG.telefone, 10).padStart(10, '0'),
+            sanitizarAlfaNum(UH_CONFIG.fax, 10).padStart(10, '0'),
+            sanitizarAlfaLimitado(UH_CONFIG.contactoNome, 40),
+            String(UH_CONFIG.contactoEmail).trim().slice(0, 140)
+          ].join("|") + "|";
+
+          datLines.push(rec0);
+
+          // 2. REGISTOS DE BOLETIM (TIPO 1) - Apenas os selecionados
+          selecionados.forEach(h => {
+            const apelido = sanitizarAlfaNome(h.Apelido || h.apelido || h[2] || '');
+            const nome = sanitizarAlfaNome(h.Nome || h.nome || h[3] || '');
+            const nac = sanitizarAlfaNum(h.Nacionalidade || h.nacionalidade || h[5] || 'PRT', 3);
+            const locNasc = sanitizarAlfaLimitado(h.Local_Nascimento || h.localNascimento || h[6] || '', 40);
+            const dataNasc = formatarDataAIMA(h.Data_Nascimento || h.dataNascimento || h[4] || '');
+            const numDoc = sanitizarAlfaNum(h.Numero_Documento || h.docNumero || h[8] || '', 16);
+            const tipoDoc = sanitizarAlfaNum(h.Tipo_Documento || h.docTipo || h[7] || 'B', 3);
+            const paisEmissor = sanitizarAlfaNum(h.Pais_Emissor || h.docPais || h[9] || 'PRT', 3);
+            const paisRes = sanitizarAlfaNum(h.Pais_Residencia || h.paisResidencia || h[10] || 'PRT', 3);
+            const locRes = sanitizarAlfaLimitado(h.Local_Residencia || h.localResidencia || h[11] || '', 30);
+            const dtEntrada = formatarDataAIMA(h.Check_In || h.dataEntrada || h[12] || '');
+            const dtSaida = formatarDataAIMA(h.Check_Out || h.dataSaida || h[13] || '');
+
+            const rec1 = [
+              "1",
+              apelido,
+              nome,
+              nac,
+              locNasc,
+              dataNasc,
+              numDoc,
+              tipoDoc,
+              paisEmissor,
+              paisRes,
+              locRes,
+              dtEntrada,
+              dtSaida
+            ].join("|") + "|";
+
+            datLines.push(rec1);
           });
 
-          const result = await response.json();
+          // 3. REGISTO DE RESUMO (TIPO 9)
+          const totalRegistos = datLines.length + 1; // Inclui o próprio registo 9
+          const dataHojeFormatada = formatarDataAIMA(new Date());
+          const numSerieFormatted = String(numFicheiroSerie).padStart(5, '0');
 
-          if (result.status === "success") {
-            const list = result.data || [];
+          const rec9 = [
+            "9",
+            String(totalRegistos).padStart(5, '0'),
+            dataHojeFormatada,
+            numSerieFormatted
+          ].join("|") + "|";
 
-            if (list.length === 0) {
-              alert(`Nenhum registo elegível de estrangeiro encontrado entre ${exportDataInicio} e ${exportDataFim}.`);
-              setExporting(false);
-              return;
-            }
+          datLines.push(rec9);
 
-            let datLines = [];
+          // Nomenclatura: <NIF><Estabelecimento><NumeroFicheiro>.DAT
+          const nomeFicheiroDAT = `${UH_CONFIG.nif}${UH_CONFIG.estabelecimento}${numSerieFormatted}.DAT`;
+          const datContent = datLines.join("\r\n");
 
-            // 1. REGISTO DE CABEÇALHO (TIPO 0)
-            const rec0 = [
-              "0",
-              "BA03",
-              sanitizarAlfaNum(UH_CONFIG.nif, 9).padStart(9, '0'),
-              sanitizarAlfaNum(UH_CONFIG.estabelecimento, 4).padStart(4, '0'),
-              sanitizarAlfaLimitado(UH_CONFIG.nome, 40),
-              sanitizarAlfaLimitado(UH_CONFIG.morada, 40),
-              sanitizarAlfaLimitado(UH_CONFIG.localidade, 30),
-              sanitizarAlfaNum(UH_CONFIG.codPostal, 4).padStart(4, '0'),
-              sanitizarAlfaNum(UH_CONFIG.zonaPostal, 3).padStart(3, '0'),
-              sanitizarAlfaNum(UH_CONFIG.telefone, 10).padStart(10, '0'),
-              sanitizarAlfaNum(UH_CONFIG.fax, 10).padStart(10, '0'),
-              sanitizarAlfaLimitado(UH_CONFIG.contactoNome, 40),
-              String(UH_CONFIG.contactoEmail).trim().slice(0, 140)
-            ].join("|") + "|";
+          const blob = new Blob([datContent], { type: "text/plain;charset=utf-8" });
+          const link = document.createElement("a");
+          link.href = URL.createObjectURL(blob);
+          link.download = nomeFicheiroDAT;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
 
-            datLines.push(rec0);
-
-            // 2. REGISTOS DE BOLETIM (TIPO 1)
-            list.forEach(h => {
-              const apelido = sanitizarAlfaNome(h.Apelido || h.apelido || '');
-              const nome = sanitizarAlfaNome(h.Nome || h.nome || '');
-              const nac = sanitizarAlfaNum(h.Nacionalidade || h.nacionalidade || 'PRT', 3);
-              const locNasc = sanitizarAlfaLimitado(h.Local_Nascimento || h.localNascimento || '', 40);
-              const dataNasc = formatarDataAIMA(h.Data_Nascimento || h.dataNascimento || '');
-              const numDoc = sanitizarAlfaNum(h.Numero_Documento || h.docNumero || '', 16);
-              const tipoDoc = sanitizarAlfaNum(h.Tipo_Documento || h.docTipo || 'B', 3);
-              const paisEmissor = sanitizarAlfaNum(h.Pais_Emissor || h.docPais || 'PRT', 3);
-              const paisRes = sanitizarAlfaNum(h.Pais_Residencia || h.paisResidencia || 'PRT', 3);
-              const locRes = sanitizarAlfaLimitado(h.Local_Residencia || h.localResidencia || '', 30);
-              const dtEntrada = formatarDataAIMA(h.Check_In || h.dataEntrada || '');
-              const dtSaida = formatarDataAIMA(h.Check_Out || h.dataSaida || '');
-
-              const rec1 = [
-                "1",
-                apelido,
-                nome,
-                nac,
-                locNasc,
-                dataNasc,
-                numDoc,
-                tipoDoc,
-                paisEmissor,
-                paisRes,
-                locRes,
-                dtEntrada,
-                dtSaida
-              ].join("|") + "|";
-
-              datLines.push(rec1);
-            });
-
-            // 3. REGISTO DE RESUMO (TIPO 9)
-            const totalRegistos = datLines.length + 1; // Inclui o próprio registo 9
-            const dataHojeFormatada = formatarDataAIMA(new Date());
-            const numSerieFormatted = String(numFicheiroSerie).padStart(5, '0');
-
-            const rec9 = [
-              "9",
-              String(totalRegistos).padStart(5, '0'),
-              dataHojeFormatada,
-              numSerieFormatted
-            ].join("|") + "|";
-
-            datLines.push(rec9);
-
-            // GERAÇÃO DO FICHEIRO COM NOMENCLATURA: <NIF><Estabelecimento><NumeroFicheiro>.DAT
-            const nomeFicheiroDAT = `${UH_CONFIG.nif}${UH_CONFIG.estabelecimento}${numSerieFormatted}.DAT`;
-            const datContent = datLines.join("\r\n");
-
-            const blob = new Blob([datContent], { type: "text/plain;charset=utf-8" });
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.download = nomeFicheiroDAT;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-
-            alert(`✅ Ficheiro oficial AIMA ${nomeFicheiroDAT} gerado com sucesso!\n\nTotal de registos no ficheiro: ${totalRegistos} (Cabeçalho + ${list.length} Hóspedes + Resumo).`);
-          } else {
-            alert('Erro ao obter dados: ' + result.message);
-          }
+          alert(`✅ Ficheiro oficial AIMA ${nomeFicheiroDAT} gerado com sucesso!\n\nForam incluídos ${selecionados.length} boletim(ns) de hóspedes selecionados.`);
         } catch (error) {
-          alert('❌ Erro ao comunicar com o servidor.');
+          alert('❌ Erro ao gerar ficheiro .DAT');
         } finally {
           setExporting(false);
         }
@@ -271,10 +354,10 @@
         if (!filtroTexto.trim()) return true;
         const q = filtroTexto.toLowerCase();
         return (
-          String(r.Apelido || '').toLowerCase().includes(q) ||
-          String(r.Nome || '').toLowerCase().includes(q) ||
-          String(r.Numero_Documento || '').toLowerCase().includes(q) ||
-          String(r.ID_Boletim || '').toLowerCase().includes(q)
+          String(r.Apelido || r[2] || '').toLowerCase().includes(q) ||
+          String(r.Nome || r[3] || '').toLowerCase().includes(q) ||
+          String(r.Numero_Documento || r[8] || '').toLowerCase().includes(q) ||
+          String(r.ID_Boletim || r[0] || '').toLowerCase().includes(q)
         );
       });
 
@@ -301,34 +384,35 @@
 
           <main className="max-w-6xl mx-auto p-4 mt-6 space-y-8">
 
-            {/* SECTOR 1: GERADOR AIMA .DAT */}
-            <section className="bg-slate-800/80 border border-amber-500/30 p-6 rounded-2xl shadow-xl space-y-4">
+            {/* PAINEL AIMA: SELEÇÃO DE DATAS E GERAÇÃO .DAT */}
+            <section className="bg-slate-800/80 border border-amber-500/30 p-6 rounded-2xl shadow-xl space-y-5">
               <div className="flex items-center gap-2 border-b border-slate-700 pb-3">
                 <span className="text-xl">📄</span>
                 <div>
                   <h2 className="text-base font-bold text-amber-400">Gerador do Ficheiro .DAT para a AIMA</h2>
-                  <p className="text-xs text-slate-300">Exporta os boletins de alojamento com a estrutura oficial de 3 registos (Tipo 0, 1 e 9).</p>
+                  <p className="text-xs text-slate-300">Escolha as datas de check-in, pesquise os estrangeiros e selecione manualmente quem incluir no ficheiro.</p>
                 </div>
               </div>
 
-              <form onSubmit={handleExportDAT} className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end text-xs">
+              {/* FORMULÁRIO DE PESQUISA POR DATA */}
+              <form onSubmit={handleProcurarEstrangeirosAIMA} className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end text-xs">
                 <div>
-                  <label className="block font-semibold text-slate-300 mb-1">Data Início (Check-in)</label>
+                  <label className="block font-semibold text-slate-300 mb-1">Data Início (Check-in) 📅</label>
                   <input 
                     type="date" 
                     value={exportDataInicio} 
                     onChange={e => setExportDataInicio(e.target.value)} 
-                    className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-lg text-white font-medium outline-none focus:border-amber-500" 
+                    className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-lg text-white font-medium outline-none focus:border-amber-500 cursor-pointer" 
                     required 
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-300 mb-1">Data Fim (Check-in)</label>
+                  <label className="block font-semibold text-slate-300 mb-1">Data Fim (Check-in) 📅</label>
                   <input 
                     type="date" 
                     value={exportDataFim} 
                     onChange={e => setExportDataFim(e.target.value)} 
-                    className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-lg text-white font-medium outline-none focus:border-amber-500" 
+                    className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-lg text-white font-medium outline-none focus:border-amber-500 cursor-pointer" 
                     required 
                   />
                 </div>
@@ -346,22 +430,88 @@
                 </div>
                 <button 
                   type="submit" 
-                  disabled={exporting}
-                  className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 rounded-lg transition shadow flex items-center justify-center gap-2 disabled:bg-slate-700"
+                  disabled={carregandoEstrangeiros}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition shadow flex items-center justify-center gap-2 disabled:bg-slate-700"
                 >
-                  {exporting ? 'A Gerar...' : '📄 Descarregar .DAT (AIMA)'}
+                  {carregandoEstrangeiros ? 'A Pesquisar...' : '🔍 Procurar Hóspedes'}
                 </button>
               </form>
+
+              {/* TABELA DE REGISTOS ESTRANGEIROS ENCONTRADOS E SELEÇÃO */}
+              {estrangeirosAIMA.length > 0 && (
+                <div className="space-y-3 pt-3 border-t border-slate-700">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                    <span className="text-xs font-bold text-slate-200">
+                      Hóspedes Estrangeiros Encontrados: <span className="text-amber-400">{estrangeirosAIMA.length}</span> | Selecionados: <span className="text-emerald-400">{estrangeirosAIMA.filter(i => i._selecionado).length}</span>
+                    </span>
+                    <button 
+                      type="button" 
+                      onClick={toggleSelecionarTodos} 
+                      className="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded text-slate-200 font-semibold"
+                    >
+                      {estrangeirosAIMA.every(i => i._selecionado) ? 'Desselecionar Todos' : 'Selecionar Todos'}
+                    </button>
+                  </div>
+
+                  <div className="overflow-x-auto border border-slate-700 rounded-lg">
+                    <table className="w-full text-left text-xs divide-y divide-slate-700">
+                      <thead className="bg-slate-900 text-slate-300 font-semibold uppercase">
+                        <tr>
+                          <th className="p-3 text-center w-12">Enviar</th>
+                          <th className="p-3">Hóspede (Apelido, Nome)</th>
+                          <th className="p-3">Nacionalidade</th>
+                          <th className="p-3">Documento</th>
+                          <th className="p-3">Check-in</th>
+                          <th className="p-3">Check-out</th>
+                          <th className="p-3">Valor Estadia</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-700/60 bg-slate-900/50">
+                        {estrangeirosAIMA.map((item) => (
+                          <tr key={item._tempId} className={`hover:bg-slate-700/40 ${item._selecionado ? 'bg-amber-950/20' : 'opacity-60'}`}>
+                            <td className="p-3 text-center">
+                              <input 
+                                type="checkbox" 
+                                checked={item._selecionado} 
+                                onChange={() => toggleSelecaoRegisto(item._tempId)} 
+                                className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
+                              />
+                            </td>
+                            <td className="p-3 font-bold text-white">
+                              {item.Apelido || item.apelido || item[2] ? `${item.Apelido || item.apelido || item[2]}, ${item.Nome || item.nome || item[3]}` : (item.Nome || item[3])}
+                            </td>
+                            <td className="p-3 font-mono font-bold text-amber-300">{item.Nacionalidade || item.nacionalidade || item[5]}</td>
+                            <td className="p-3 font-mono">{item.Tipo_Documento || item.docTipo || item[7]}: {item.Numero_Documento || item.docNumero || item[8]}</td>
+                            <td className="p-3 font-mono text-slate-200">{formatarDataIso(item.Check_In || item.Data_Entrada || item[12])}</td>
+                            <td className="p-3 font-mono text-amber-300">{formatarDataIso(item.Check_Out || item.Data_Saida || item[13])}</td>
+                            <td className="p-3 font-bold text-emerald-400">{item.Valor_Reserva || item.valorReserva || item[19] || '0.00 €'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="pt-2 flex justify-end">
+                    <button 
+                      onClick={handleExportDAT}
+                      disabled={exporting || estrangeirosAIMA.filter(i => i._selecionado).length === 0}
+                      className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-6 py-3 rounded-lg transition shadow-lg text-xs flex items-center gap-2 disabled:bg-slate-700"
+                    >
+                      {exporting ? 'A Gerar...' : '📄 Descarregar .DAT da Seleção (AIMA)'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </section>
 
-            {/* SECTOR 2: HISTÓRICO COMPLETO DE REGISTOS */}
+            {/* PAINEL HISTÓRICO GERAL COMPLETO (NACIONAIS E ESTRANGEIROS) */}
             <section className="bg-slate-800/80 border border-slate-700 p-6 rounded-2xl shadow-xl space-y-4">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-700 pb-3">
                 <div className="flex items-center gap-2">
                   <span className="text-xl">📊</span>
                   <div>
                     <h2 className="text-base font-bold text-white">Histórico Geral de Registos de Alojamento</h2>
-                    <p className="text-xs text-slate-400">Total acumulado na base de dados: {registosAlojamento.length} registo(s)</p>
+                    <p className="text-xs text-slate-400">Base de dados completa (Hóspedes Nacionais e Estrangeiros): {registosAlojamento.length} registo(s)</p>
                   </div>
                 </div>
                 <div className="flex gap-2 w-full sm:w-auto">
@@ -397,22 +547,24 @@
                         <th className="p-2.5">Check-in</th>
                         <th className="p-2.5">Check-out</th>
                         <th className="p-2.5">Reserva / Modo</th>
+                        <th className="p-2.5">Valor Estadia</th>
                         <th className="p-2.5">Taxa Turística</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-700/50">
                       {registosFiltrados.map((r, idx) => (
                         <tr key={idx} className="hover:bg-slate-700/30">
-                          <td className="p-2.5 font-mono text-amber-400">{r.ID_Boletim || '-'}</td>
+                          <td className="p-2.5 font-mono text-amber-400">{r.ID_Boletim || r[0] || '-'}</td>
                           <td className="p-2.5 font-bold text-white">
-                            {r.Apelido || r.apelido ? `${r.Apelido || r.apelido}, ${r.Nome || r.nome}` : r.Nome}
+                            {r.Apelido || r[2] ? `${r.Apelido || r[2]}, ${r.Nome || r[3]}` : (r.Nome || r[3])}
                           </td>
-                          <td className="p-2.5 font-mono">{r.Nacionalidade || r.nacionalidade}</td>
-                          <td className="p-2.5 font-mono">{r.Tipo_Documento || r.docTipo}: {r.Numero_Documento || r.docNumero}</td>
-                          <td className="p-2.5">{r.Check_In || r.Data_Entrada}</td>
-                          <td className="p-2.5 text-amber-300 font-semibold">{r.Check_Out || r.Data_Saida}</td>
-                          <td className="p-2.5">{r.Numero_Reserva || 'sem reserva'} <span className="text-slate-500">({r.Plataforma_Reserva || '-'})</span></td>
-                          <td className="p-2.5 font-bold text-emerald-400">{r.Taxa_Turistica || '0.00 €'}</td>
+                          <td className="p-2.5 font-mono">{r.Nacionalidade || r[5]}</td>
+                          <td className="p-2.5 font-mono">{r.Tipo_Documento || r[7]}: {r.Numero_Documento || r[8]}</td>
+                          <td className="p-2.5 font-mono text-slate-200">{formatarDataIso(r.Check_In || r[12])}</td>
+                          <td className="p-2.5 font-mono text-amber-300 font-semibold">{formatarDataIso(r.Check_Out || r[13])}</td>
+                          <td className="p-2.5">{r.Numero_Reserva || r[23] || 'sem reserva'} <span className="text-slate-500">({r.Plataforma_Reserva || r[24] || '-'})</span></td>
+                          <td className="p-2.5 font-bold text-emerald-400">{r.Valor_Reserva || r[19] || '0.00 €'}</td>
+                          <td className="p-2.5 font-bold text-emerald-300">{r.Taxa_Turistica || r[20] || '0.00 €'}</td>
                         </tr>
                       ))}
                     </tbody>
