@@ -411,7 +411,7 @@
         const idBoletim = String(arr[0] || 'CV-HIST').trim();
         const apelido = String(arr[2] || '').trim();
         const nome = String(arr[3] || '').trim();
-        const nomeCompleto = `${apelido} ${nome}`.trim();
+        const nomeFormatadoComprovativo = nome ? `${apelido}, ${nome}` : apelido;
         const dataNascimento = formatarDataLimpa(arr[4]);
         const nacionalidade = String(arr[5] || 'PRT').trim();
         const localNascimento = String(arr[6] || '').trim();
@@ -444,7 +444,7 @@
           idBoletim,
           apelido,
           nome,
-          nomeCompleto,
+          nomeCompleto: nomeFormatadoComprovativo,
           dataNascimento,
           nacionalidade,
           localNascimento,
@@ -620,11 +620,14 @@
           ? `[${selectedFuncObj.id}] ${selectedFuncObj.nome}` 
           : selectedFuncObj.nome;
 
-        const nomeCompleto = `${novoBoletim.apelido} ${novoBoletim.nome}`.trim();
+        // Formatação APELIDO, NOME para o comprovativo
+        const nomeFormatadoComprovativo = novoBoletim.nome.trim() 
+          ? `${novoBoletim.apelido.trim()}, ${novoBoletim.nome.trim()}` 
+          : novoBoletim.apelido.trim();
 
         const payload = { 
           ...novoBoletim, 
-          nomeCompleto,
+          nomeCompleto: nomeFormatadoComprovativo,
           idBoletim, 
           funcionarioRececao: funcionarioString,
           funcionarioId: selectedFuncObj.id || '',
