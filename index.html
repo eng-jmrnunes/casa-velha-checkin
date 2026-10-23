@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Casa Velha, Terminal de Check-in & AIMA</title>
+  <title>Casa Velha - Terminal de Check-in (AIMA)</title>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -46,29 +46,49 @@
       "Outro"
     ];
 
-    const PAISES = [
-      "Portugal", "Afeganistão", "África do Sul", "Albânia", "Alemanha", "Andorra", "Angola", "Antígua e Barbuda",
-      "Arábia Saudita", "Argélia", "Argentina", "Arménia", "Austrália", "Áustria", "Azerbaijão", "Bahamas", "Bangladesh",
-      "Barbados", "Barém", "Bélgica", "Belize", "Benim", "Bielorrússia", "Bolívia", "Bósnia e Herzegovina", "Botsuana",
-      "Brasil", "Brunei", "Bulgária", "Burquina Faso", "Burundi", "Butão", "Cabo Verde", "Camarões", "Camboja", "Canadá",
-      "Catar", "Cazaquistão", "Chade", "Chile", "China", "Chipre", "Ciribati", "Colômbia", "Comores", "Congo-Brazzaville",
-      "Coreia do Norte", "Coreia do Sul", "Costa do Marfim", "Costa Rica", "Croácia", "Cuaite", "Cuba", "Dinamarca",
-      "Dominica", "Egipto", "Emirados Árabes Unidos", "Equador", "Eritreia", "Eslováquia", "Eslovénia", "Espanha",
-      "Estónia", "Eswatini", "Estados Unidos", "Etiópia", "Fiji", "Filipinas", "Finlândia", "França", "Gabão", "Gâmbia",
-      "Gana", "Geórgia", "Granada", "Grécia", "Guatemala", "Guiana", "Guiné", "Guiné Equatorial", "Guiné-Bissau",
-      "Haiti", "Holanda", "Honduras", "Hungria", "Iémen", "Ilhas Marshall", "Ilhas Salomão", "Índia", "Indonésia",
-      "Irão", "Iraque", "Irlanda", "Islândia", "Israel", "Itália", "Jamaica", "Japão", "Jordânia", "Kowait", "Laos",
-      "Lesoto", "Letónia", "Líbano", "Libéria", "Líbia", "Liechtenstein", "Lituânia", "Luxemburgo", "Macedónia do Norte",
-      "Madagáscar", "Malásia", "Maláui", "Maldivas", "Mali", "Malta", "Marrocos", "Maurícia", "Mauritânia", "México",
-      "Mianmar", "Micronésia", "Moçambique", "Moldávia", "Mónaco", "Mongólia", "Montenegro", "Namíbia", "Nauru", "Nepal",
-      "Nicarágua", "Níger", "Nigéria", "Noruega", "Nova Zelândia", "Omã", "Palau", "Palestina", "Panamá", "Papua Nova Guiné",
-      "Paquistão", "Paraguai", "Peru", "Polónia", "Quénia", "Quirguizistão", "Quiribati", "Reino Unido", "República Centro-Africana",
-      "República Checa", "República Democrática do Congo", "República Dominicana", "Roménia", "Ruanda", "Rússia", "Samoa",
-      "Santa Lúcia", "São Cristóvão e Neves", "São Marino", "São Tomé e Príncipe", "São Vicente e Granadinas", "Senegal",
-      "Sérvia", "Seicheles", "Serra Leoa", "Singapura", "Síria", "Somália", "Sri Lanka", "Sudão", "Sudão do Sul", "Suécia",
-      "Suíça", "Suriname", "Tailândia", "Tajiquistão", "Tanzânia", "Timor-Leste", "Togo", "Tonga", "Trindade e Tobago",
-      "Tunísia", "Turquemenistão", "Turquia", "Tuvalu", "Ucrânia", "Uganda", "Uruguai", "Uzbequistão", "Vanuatu",
-      "Vaticano", "Venezuela", "Vietname", "Zâmbia", "Zimbabué"
+    // Tabela de Países ICAO (Códigos de 3 letras exigidos pela AIMA)
+    const PAISES_ICAO = [
+      { nome: "Portugal", code: "PRT" },
+      { nome: "Alemanha", code: "DEU" },
+      { nome: "Espanha", code: "ESP" },
+      { nome: "França", code: "FRA" },
+      { nome: "Reino Unido", code: "GBR" },
+      { nome: "Itália", code: "ITA" },
+      { nome: "Países Baixos", code: "NLD" },
+      { nome: "Bélgica", code: "BEL" },
+      { nome: "Brasil", code: "BRA" },
+      { nome: "Estados Unidos", code: "USA" },
+      { nome: "Canadá", code: "CAN" },
+      { nome: "Suíça", code: "CHE" },
+      { nome: "Irlanda", code: "IRL" },
+      { nome: "Áustria", code: "AUT" },
+      { nome: "Polónia", code: "POL" },
+      { nome: "Suécia", code: "SWE" },
+      { nome: "Noruega", code: "NOR" },
+      { nome: "Dinamarca", code: "DNK" },
+      { nome: "Finlândia", code: "FIN" },
+      { nome: "Afeganistão", code: "AFG" },
+      { nome: "África do Sul", code: "ZAF" },
+      { nome: "Albânia", code: "ALB" },
+      { nome: "Andorra", code: "AND" },
+      { nome: "Angola", code: "AGO" },
+      { nome: "Argentina", code: "ARG" },
+      { nome: "Austrália", code: "AUS" },
+      { nome: "Cabo Verde", code: "CPV" },
+      { nome: "China", code: "CHN" },
+      { nome: "Colômbia", code: "COL" },
+      { nome: "Guiné-Bissau", code: "GNB" },
+      { nome: "Índia", code: "IND" },
+      { nome: "Japão", code: "JPN" },
+      { nome: "Marrocos", code: "MAR" },
+      { nome: "México", code: "MEX" },
+      { nome: "Moçambique", code: "MOZ" },
+      { nome: "Paquistão", code: "PAK" },
+      { nome: "Roménia", code: "ROU" },
+      { nome: "Rússia", code: "RUS" },
+      { nome: "São Tomé e Príncipe", code: "STP" },
+      { nome: "Ucrânia", code: "UKR" },
+      { nome: "Venezuela", code: "VEN" }
     ];
 
     const ANO_ATUAL = new Date().getFullYear();
@@ -80,9 +100,17 @@
       { num: '10', nome: 'Outubro' }, { num: '11', nome: 'Novembro' }, { num: '12', nome: 'Dezembro' }
     ];
 
+    // Sanitização de texto conforme regras AIMA (Alfabético Maiúsculo)
+    const sanitizarTextoAIMA = (txt) => {
+      if (!txt) return '';
+      return String(txt)
+        .toUpperCase()
+        .replace(/[^A-ZÇÃÁÀÉÊÍÕÔÓÚ'\-\s]/g, '')
+        .trimStart();
+    };
+
     function CheckInAIMA() {
       const [loading, setLoading] = useState(false);
-      const [exporting, setExporting] = useState(false);
       
       const [searchQuery, setSearchQuery] = useState('');
       const [searchResults, setSearchResults] = useState([]);
@@ -111,13 +139,16 @@
       const todayStr = new Date().toISOString().slice(0, 10);
 
       const [novoBoletim, setNovoBoletim] = useState({
+        apelido: '',
         nome: '',
         dataNascimento: '',
-        nacionalidade: 'Portugal',
-        docTipo: 'Cartão de Cidadão / BI',
+        nacionalidade: 'PRT',
+        localNascimento: '',
+        docTipo: 'B', // B - BI/CC, P - Passaporte, O - Outro
         docNumero: '',
-        docPais: 'Portugal',
-        paisResidencia: 'Portugal',
+        docPais: 'PRT',
+        paisResidencia: 'PRT',
+        localResidencia: '',
         dataEntrada: todayStr,
         dataSaida: '',
         tipoAlojamento: 'Quarto Duplo com Vista Mar',
@@ -131,9 +162,6 @@
         numeroReserva: '',
         plataformaReserva: 'sem reserva'
       });
-
-      const [exportDataInicio, setExportDataInicio] = useState(todayStr);
-      const [exportDataFim, setExportDataFim] = useState(todayStr);
 
       const [numeroNoites, setNumeroNoites] = useState(0);
 
@@ -205,50 +233,57 @@
           arr = [
             r.ID_Boletim || r[0] || '',
             r.Data_Registo || r[1] || '',
-            r.Nome || r[2] || '',
-            r.Data_Nascimento || r[3] || '',
-            r.Nacionalidade || r[4] || '',
-            r.Tipo_Documento || r[5] || '',
-            r.Numero_Documento || r[6] || '',
-            r.Pais_Emissor || r[7] || '',
-            r.Pais_Residencia || r[8] || '',
-            r.Check_In || r[9] || '',
-            r.Check_Out || r[10] || '',
-            r.Tipo_Alojamento || r[11] || '',
-            r.Numero_Unidade || r[12] || '',
-            r.E_Menor || r[13] || '',
-            r.Titular_Documento || r[14] || '',
-            r.Qualidade_Acompanhante || r[15] || '',
-            r.Valor_Reserva || r[16] || '',
-            r.Taxa_Turistica || r[17] || '',
-            r.Modo_Pagamento || r[18] || '',
-            r.Funcionario_Rececao || r[19] || '',
-            r.Numero_Reserva || r[20] || '',
-            r.Plataforma_Reserva || r[21] || 'sem reserva'
+            r.Apelido || r[2] || '',
+            r.Nome || r[3] || '',
+            r.Data_Nascimento || r[4] || '',
+            r.Nacionalidade || r[5] || '',
+            r.Local_Nascimento || r[6] || '',
+            r.Tipo_Documento || r[7] || '',
+            r.Numero_Documento || r[8] || '',
+            r.Pais_Emissor || r[9] || '',
+            r.Pais_Residencia || r[10] || '',
+            r.Local_Residencia || r[11] || '',
+            r.Check_In || r[12] || '',
+            r.Check_Out || r[13] || '',
+            r.Tipo_Alojamento || r[14] || '',
+            r.Numero_Unidade || r[15] || '',
+            r.E_Menor || r[16] || '',
+            r.Titular_Documento || r[17] || '',
+            r.Qualidade_Acompanhante || r[18] || '',
+            r.Valor_Reserva || r[19] || '',
+            r.Taxa_Turistica || r[20] || '',
+            r.Modo_Pagamento || r[21] || '',
+            r.Funcionario_Rececao || r[22] || '',
+            r.Numero_Reserva || r[23] || '',
+            r.Plataforma_Reserva || r[24] || 'sem reserva'
           ];
         }
 
         const idBoletim = String(arr[0] || 'CV-HIST').trim();
-        const nome = String(arr[2] || '').trim();
-        const dataNascimento = formatarDataLimpa(arr[3]);
-        const nacionalidade = String(arr[4] || 'Portugal').trim();
-        const docTipo = String(arr[5] || 'Cartão de Cidadão / BI').trim();
-        const docNumero = String(arr[6] || '').trim();
-        const docPais = String(arr[7] || 'Portugal').trim();
-        const paisResidencia = String(arr[8] || 'Portugal').trim();
-        const dataEntrada = formatarDataLimpa(arr[9]);
-        const dataSaida = formatarDataLimpa(arr[10]);
-        const tipoAlojamento = String(arr[11] || 'Quarto Duplo com Vista Mar').trim();
-        const numeroUnidade = String(arr[12] || '1').trim();
-        const eMenor = String(arr[13] || 'Não').trim();
-        const titularDoc = String(arr[14] || 'Próprio').trim();
-        const qualidadeAcompanhante = String(arr[15] || 'N/A').trim();
-        const valorReserva = formatarMoedaAvançada(arr[16]);
-        const taxaTuristica = formatarMoedaAvançada(arr[17]);
-        const modoPagamento = String(arr[18] || 'Numerário').trim();
-        const funcRececao = String(arr[19] || selectedFuncObj.nome).trim();
-        const numeroReserva = String(arr[20] || '').trim();
-        const plataformaReserva = String(arr[21] || (numeroReserva ? 'Booking' : 'sem reserva')).trim();
+        const apelido = String(arr[2] || '').trim();
+        const nome = String(arr[3] || '').trim();
+        const nomeCompleto = `${apelido} ${nome}`.trim();
+        const dataNascimento = formatarDataLimpa(arr[4]);
+        const nacionalidade = String(arr[5] || 'PRT').trim();
+        const localNascimento = String(arr[6] || '').trim();
+        const docTipo = String(arr[7] || 'B').trim();
+        const docNumero = String(arr[8] || '').trim();
+        const docPais = String(arr[9] || 'PRT').trim();
+        const paisResidencia = String(arr[10] || 'PRT').trim();
+        const localResidencia = String(arr[11] || '').trim();
+        const dataEntrada = formatarDataLimpa(arr[12]);
+        const dataSaida = formatarDataLimpa(arr[13]);
+        const tipoAlojamento = String(arr[14] || 'Quarto Duplo com Vista Mar').trim();
+        const numeroUnidade = String(arr[15] || '1').trim();
+        const eMenor = String(arr[16] || 'Não').trim();
+        const titularDoc = String(arr[17] || 'Próprio').trim();
+        const qualidadeAcompanhante = String(arr[18] || 'N/A').trim();
+        const valorReserva = formatarMoedaAvançada(arr[19]);
+        const taxaTuristica = formatarMoedaAvançada(arr[20]);
+        const modoPagamento = String(arr[21] || 'Numerário').trim();
+        const funcRececao = String(arr[22] || selectedFuncObj.nome).trim();
+        const numeroReserva = String(arr[23] || '').trim();
+        const plataformaReserva = String(arr[24] || (numeroReserva ? 'Booking' : 'sem reserva')).trim();
 
         let funcId = '';
         if (funcRececao && funcRececao.includes('[') && funcRececao.includes(']')) {
@@ -258,10 +293,14 @@
         return {
           rowIndex: rIndex,
           idBoletim,
+          apelido,
           nome,
+          nomeCompleto,
           dataNascimento,
           nacionalidade,
+          localNascimento,
           paisResidencia,
+          localResidencia,
           docTipo,
           docNumero,
           docPais,
@@ -322,18 +361,21 @@
               const totalEstadias = result.data.length;
 
               setAlertaRecorrente({
-                nome: norm.nome,
+                nome: norm.nomeCompleto,
                 estadias: totalEstadias,
                 ultimaEntrada: norm.dataEntrada
               });
 
               setNovoBoletim(prev => ({
                 ...prev,
+                apelido: norm.apelido || prev.apelido,
                 nome: norm.nome || prev.nome,
                 nacionalidade: norm.nacionalidade || prev.nacionalidade,
+                localNascimento: norm.localNascimento || prev.localNascimento,
                 docTipo: norm.docTipo || prev.docTipo,
                 docPais: norm.docPais || prev.docPais,
-                paisResidencia: norm.paisResidencia || prev.paisResidencia
+                paisResidencia: norm.paisResidencia || prev.paisResidencia,
+                localResidencia: norm.localResidencia || prev.localResidencia
               }));
 
               if (norm.dataNascimento) {
@@ -407,8 +449,13 @@
       const handleSubmit = async (e) => {
         e.preventDefault();
 
+        if (!novoBoletim.apelido.trim()) {
+          alert('Por favor introduza o Apelido do hóspede.');
+          return;
+        }
+
         if (!novoBoletim.dataNascimento) {
-          alert('Por favor selecione o Ano, Mês e Dia de Nascimento.');
+          alert('Por favor selecione a Data de Nascimento.');
           return;
         }
 
@@ -424,8 +471,11 @@
           ? `[${selectedFuncObj.id}] ${selectedFuncObj.nome}` 
           : selectedFuncObj.nome;
 
+        const nomeCompleto = `${novoBoletim.apelido} ${novoBoletim.nome}`.trim();
+
         const payload = { 
           ...novoBoletim, 
+          nomeCompleto,
           idBoletim, 
           funcionarioRececao: funcionarioString,
           funcionarioId: selectedFuncObj.id || '',
@@ -451,13 +501,16 @@
           setUltimoSucesso(payload);
 
           setNovoBoletim({
+            apelido: '',
             nome: '',
             dataNascimento: '',
-            nacionalidade: 'Portugal',
-            docTipo: 'Cartão de Cidadão / BI',
+            nacionalidade: 'PRT',
+            localNascimento: '',
+            docTipo: 'B',
             docNumero: '',
-            docPais: 'Portugal',
-            paisResidencia: 'Portugal',
+            docPais: 'PRT',
+            paisResidencia: 'PRT',
+            localResidencia: '',
             dataEntrada: todayStr,
             dataSaida: '',
             tipoAlojamento: novoBoletim.tipoAlojamento,
@@ -546,69 +599,10 @@
         setUltimoSucesso(itemMapeado);
       };
 
-      const handleExportCSV = async (e) => {
-        e.preventDefault();
-        setExporting(true);
-
-        try {
-          const response = await fetch(GOOGLE_SCRIPT_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({
-              action: "EXPORT_CSV",
-              startDate: exportDataInicio,
-              endDate: exportDataFim
-            })
-          });
-
-          const result = await response.json();
-
-          if (result.status === "success") {
-            const list = result.data;
-
-            if (!list || list.length === 0) {
-              alert(`Nenhum registo elegível encontrado entre ${exportDataInicio} e ${exportDataFim}.`);
-              setExporting(false);
-              return;
-            }
-
-            let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
-            csvContent += "Nome_Completo,Data_Nascimento,Nacionalidade,Tipo_Documento,Numero_Documento,Pais_Emissor,Pais_Residencia,Data_Entrada,Data_Saida_Prevista,Numero_Reserva,Plataforma_Reserva\n";
-
-            list.forEach(h => {
-              const numRes = h.numeroReserva ? h.numeroReserva : 'sem reserva';
-              const row = `"${h.nome}","${h.dataNascimento}","${h.nacionalidade}","${h.docTipo}","${h.docNumero}","${h.docPais}","${h.paisResidencia}","${h.dataEntrada}","${h.dataSaida}","${numRes}","${h.plataformaReserva}"`;
-              csvContent += row + "\n";
-            });
-
-            const d = new Date();
-            const timeStamp = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}_${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}`;
-            const nomeFicheiroCSV = `AIMA_${exportDataInicio}_a_${exportDataFim}_(${timeStamp}).csv`;
-
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", nomeFicheiroCSV);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-
-            alert(`✅ Ficheiro .CSV gerado com sucesso! (${list.length} registo(s) exportado(s)).`);
-          } else {
-            alert('Erro ao obter dados: ' + result.message);
-          }
-        } catch (error) {
-          alert('❌ Erro ao comunicar com a base de dados. Tente novamente.');
-        } finally {
-          setExporting(false);
-        }
-      };
-
       const handlePrintBoletim = () => {
         if (!ultimoSucesso) return;
-
         const tituloOriginal = document.title;
-        const nomeLimpo = (ultimoSucesso.nome || 'Hospede').trim().replace(/[^a-zA-Z0-9]/g, '_');
+        const nomeLimpo = (ultimoSucesso.nomeCompleto || 'Hospede').trim().replace(/[^a-zA-Z0-9]/g, '_');
         const nomeFicheiroPDF = `Boletim_${ultimoSucesso.idBoletim}_${nomeLimpo}`;
 
         document.title = nomeFicheiroPDF;
@@ -640,7 +634,6 @@
               {/* LOGIN DO FUNCIONÁRIO */}
               <div className="bg-slate-800 p-2.5 rounded-lg border border-slate-700 flex items-center gap-2 text-xs w-full md:w-auto">
                 <span className="text-slate-400 font-semibold hidden sm:inline">👤 Receção:</span>
-                
                 <div className="flex-1 md:flex-initial">
                   {funcionarios.length > 0 ? (
                     <select 
@@ -648,18 +641,12 @@
                       onChange={e => {
                         const val = e.target.value;
                         const found = funcionarios.find(f => f.id === val || f.nome === val);
-                        if (found) {
-                          setSelectedFuncObj(found);
-                        } else {
-                          setSelectedFuncObj({ id: '', nome: val });
-                        }
+                        setSelectedFuncObj(found || { id: '', nome: val });
                       }}
                       className="w-full md:w-60 bg-slate-900 text-white border border-slate-600 rounded px-2 py-1.5 font-bold outline-none focus:ring-1 focus:ring-blue-500 text-xs"
                     >
                       {funcionarios.map(f => (
-                        <option key={f.id || f.nome} value={f.id || f.nome}>
-                          {f.nome}
-                        </option>
+                        <option key={f.id || f.nome} value={f.id || f.nome}>{f.nome}</option>
                       ))}
                     </select>
                   ) : (
@@ -672,16 +659,6 @@
                     />
                   )}
                 </div>
-
-                <input 
-                  type="password" 
-                  placeholder="••••" 
-                  value={passwordInativa} 
-                  onChange={e => setPasswordInativa(e.target.value)} 
-                  disabled
-                  title="Palavra-passe (Desativada temporariamente)"
-                  className="w-16 bg-slate-950 text-slate-600 border border-slate-700 rounded px-2 py-1.5 cursor-not-allowed text-xs text-center"
-                />
               </div>
             </div>
           </header>
@@ -691,8 +668,6 @@
             {/* PAINEL 1: PESQUISAR E ALTERAR CHECK-OUT PREVISTO */}
             <div className="bg-blue-50 p-5 rounded-xl border border-blue-200 shadow-sm space-y-3">
               <h2 className="text-sm font-bold text-blue-900">🔍 Pesquisar Hóspede, Alterar Check-out, 2ª Via</h2>
-              <p className="text-xs text-blue-700">Utilize esta secção para pesquisar registos anteriores, emitir segundas vias do boletim ou alterar a data de saída prevista.</p>
-
               <form onSubmit={handleSearch} className="flex gap-2 text-xs">
                 <input 
                   type="text" 
@@ -716,7 +691,7 @@
                   {searchResults.map(r => (
                     <div key={r.rowIndex || r.idBoletim} className="p-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                       <div>
-                        <div className="font-bold text-slate-900">{r.nome} <span className="text-blue-600 font-mono">({r.idBoletim})</span></div>
+                        <div className="font-bold text-slate-900">{r.nomeCompleto} <span className="text-blue-600 font-mono">({r.idBoletim})</span></div>
                         <div className="text-slate-500">{r.docTipo}: {r.docNumero} | {r.tipoAlojamento} (Unidade {r.numeroUnidade}) | Reserva: <strong>{r.numeroReserva || 'sem reserva'}</strong> ({r.plataformaReserva})</div>
                         <div className="text-slate-700 font-medium">Entrada: {r.dataEntrada} → Saída Atual: <span className="text-amber-700 font-bold">{r.dataSaida}</span></div>
                       </div>
@@ -741,7 +716,7 @@
 
               {editingRegisto && (
                 <div className="mt-3 p-4 bg-amber-100 rounded border border-amber-300 text-xs space-y-2">
-                  <div className="font-bold text-amber-900">Alterar Saída Prevista para: {editingRegisto.nome}</div>
+                  <div className="font-bold text-amber-900">Alterar Saída Prevista para: {editingRegisto.nomeCompleto}</div>
                   <div className="flex items-center gap-3">
                     <div>
                       <label className="block font-semibold text-amber-900 mb-1">Nova Data de Check-out Prevista:</label>
@@ -771,7 +746,7 @@
               )}
             </div>
 
-            {/* PAINEL 2: NOVO FORMULÁRIO DE CHECK-IN */}
+            {/* PAINEL 2: NOVO FORMULÁRIO DE CHECK-IN COM ESTRUTURA AIMA */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <div 
                 onClick={() => setShowBoletimForm(!showBoletimForm)}
@@ -779,9 +754,9 @@
               >
                 <div>
                   <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                    📋 Novo Boletim de Alojamento
+                    📋 Novo Boletim de Alojamento (Formato AIMA / ICAO)
                   </h2>
-                  <p className="text-xs text-slate-500">Introduza os dados de identificação do hóspede (nacional ou estrangeiro).</p>
+                  <p className="text-xs text-slate-500">Registo de hóspede com validação rigorosa de campos legais.</p>
                 </div>
                 <button type="button" className="text-slate-600 hover:text-slate-900 text-lg font-bold p-1">
                   {showBoletimForm ? '▲' : '▼'}
@@ -818,7 +793,7 @@
                     <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
                       <div className="flex justify-between items-center">
                         <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">
-                          1. Documento de Identificação
+                          1. Documento de Identificação (Regra AIMA)
                         </h3>
                         {verificandoDoc && (
                           <span className="text-[11px] text-blue-600 font-semibold animate-pulse">
@@ -833,170 +808,198 @@
                           <select 
                             value={novoBoletim.docTipo} 
                             onChange={e => setNovoBoletim({...novoBoletim, docTipo: e.target.value})} 
-                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
+                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium text-xs"
                           >
-                            <option value="Cartão de Cidadão / BI">Cartão de Cidadão / BI</option>
-                            <option value="Passaporte">Passaporte</option>
-                            <option value="Título de Residência">Título de Residência</option>
+                            <option value="B">B - Bilhete de Identidade / CC</option>
+                            <option value="P">P - Passaporte</option>
+                            <option value="O">O - Outro Documento</option>
                           </select>
                         </div>
                         <div>
                           <label className="block text-xs font-semibold text-slate-700 mb-1">Número do Documento *</label>
                           <input 
                             type="text" 
-                            placeholder="N.º do Passaporte ou BI" 
+                            placeholder="Sem espaços" 
                             value={novoBoletim.docNumero} 
-                            onChange={e => setNovoBoletim({...novoBoletim, docNumero: e.target.value})} 
-                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none font-mono font-bold text-slate-900" 
+                            onChange={e => setNovoBoletim({...novoBoletim, docNumero: e.target.value.replace(/\s+/g, '').toUpperCase()})} 
+                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none font-mono font-bold text-slate-900 text-xs" 
+                            maxLength={16}
                             required 
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">País Emissor *</label>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">País Emissor (Código ICAO) *</label>
                           <select 
                             value={novoBoletim.docPais} 
                             onChange={e => setNovoBoletim({...novoBoletim, docPais: e.target.value})} 
-                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
+                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium text-xs"
                           >
-                            {PAISES.map(p => <option key={p} value={p}>{p}</option>)}
+                            {PAISES_ICAO.map(p => <option key={p.code} value={p.code}>{p.nome} ({p.code})</option>)}
                           </select>
                         </div>
                       </div>
                     </div>
 
-                    {/* 2. Dados Pessoais */}
+                    {/* 2. Nomes e Identificação Pessoal */}
                     <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
-                      <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">2. Dados Pessoais do Hóspede</h3>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        
-                        <div className="sm:col-span-3">
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">Nome Completo *</label>
+                      <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">2. Nomes e Identificação Pessoal</h3>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Apelido (Último Nome / Família) *</label>
                           <input 
                             type="text" 
-                            placeholder="Nome conforme consta no documento de identificação" 
-                            value={novoBoletim.nome} 
-                            onChange={e => setNovoBoletim({...novoBoletim, nome: e.target.value})} 
-                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none font-medium" 
+                            placeholder="Ex: SILVA (Obrigatório)" 
+                            value={novoBoletim.apelido} 
+                            onChange={e => setNovoBoletim({...novoBoletim, apelido: sanitizarTextoAIMA(e.target.value)})} 
+                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-900 text-xs uppercase" 
+                            maxLength={40}
                             required 
                           />
                         </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Outros Nomes (Opcional se for nome único)</label>
+                          <input 
+                            type="text" 
+                            placeholder="Ex: JOÃO MANUEL" 
+                            value={novoBoletim.nome} 
+                            onChange={e => setNovoBoletim({...novoBoletim, nome: sanitizarTextoAIMA(e.target.value)})} 
+                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none font-medium text-xs uppercase" 
+                            maxLength={40}
+                          />
+                        </div>
+                      </div>
 
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
                         {/* SELEÇÃO DE NASCIMENTO */}
-                        <div className="sm:col-span-3 bg-white p-3 rounded border border-slate-200">
-                          <div className="flex justify-between items-center mb-1.5">
-                            <label className="block text-xs font-semibold text-slate-700">Data de Nascimento *</label>
+                        <div className="bg-white p-3 rounded border border-slate-200">
+                          <div className="flex justify-between items-center mb-1">
+                            <label className="block text-xs font-semibold text-slate-700">Data Nascimento *</label>
                             {idadeCalculada !== null && (
-                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${idadeCalculada < 18 ? 'bg-purple-200 text-purple-900' : 'bg-slate-200 text-slate-700'}`}>
-                                {idadeCalculada} {idadeCalculada === 1 ? 'ano' : 'anos'} ({idadeCalculada < 18 ? 'Menor' : 'Adulto'})
+                              <span className="text-[10px] font-bold bg-slate-200 px-1.5 py-0.5 rounded">
+                                {idadeCalculada} anos
                               </span>
                             )}
                           </div>
-                          
-                          <div className="grid grid-cols-3 gap-2">
-                            <div>
-                              <label className="block text-[10px] text-slate-500 mb-0.5">Ano</label>
-                              <select 
-                                value={nasceAno} 
-                                onChange={e => handleSelectNascimento(e.target.value, nasceMes, nasceDia)}
-                                className="w-full border border-slate-300 p-2 rounded bg-white text-xs font-bold"
-                                required
-                              >
-                                <option value="">-- Seleção --</option>
-                                {ANOS_LISTA.map(a => <option key={a} value={a}>{a}</option>)}
-                              </select>
-                            </div>
-
-                            <div>
-                              <label className="block text-[10px] text-slate-500 mb-0.5">Mês</label>
-                              <select 
-                                value={nasceMes} 
-                                onChange={e => handleSelectNascimento(nasceAno, e.target.value, nasceDia)}
-                                className="w-full border border-slate-300 p-2 rounded bg-white text-xs font-medium"
-                              >
-                                {MESES_LISTA.map(m => <option key={m.num} value={m.num}>{m.nome}</option>)}
-                              </select>
-                            </div>
-
-                            <div>
-                              <label className="block text-[10px] text-slate-500 mb-0.5">Dia</label>
-                              <select 
-                                value={nasceDia} 
-                                onChange={e => handleSelectNascimento(nasceAno, nasceMes, e.target.value)}
-                                className="w-full border border-slate-300 p-2 rounded bg-white text-xs font-medium"
-                              >
-                                {Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0')).map(d => (
-                                  <option key={d} value={d}>{d}</option>
-                                ))}
-                              </select>
-                            </div>
+                          <div className="grid grid-cols-3 gap-1">
+                            <select 
+                              value={nasceAno} 
+                              onChange={e => handleSelectNascimento(e.target.value, nasceMes, nasceDia)}
+                              className="border p-1 rounded text-xs font-bold"
+                              required
+                            >
+                              <option value="">Ano</option>
+                              {ANOS_LISTA.map(a => <option key={a} value={a}>{a}</option>)}
+                            </select>
+                            <select 
+                              value={nasceMes} 
+                              onChange={e => handleSelectNascimento(nasceAno, e.target.value, nasceDia)}
+                              className="border p-1 rounded text-xs"
+                            >
+                              {MESES_LISTA.map(m => <option key={m.num} value={m.num}>{m.num}</option>)}
+                            </select>
+                            <select 
+                              value={nasceDia} 
+                              onChange={e => handleSelectNascimento(nasceAno, nasceMes, e.target.value)}
+                              className="border p-1 rounded text-xs"
+                            >
+                              {Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0')).map(d => (
+                                <option key={d} value={d}>{d}</option>
+                              ))}
+                            </select>
                           </div>
                         </div>
 
                         <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">Nacionalidade *</label>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Nacionalidade (ICAO) *</label>
                           <select 
                             value={novoBoletim.nacionalidade} 
                             onChange={e => setNovoBoletim({...novoBoletim, nacionalidade: e.target.value})} 
-                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
+                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium text-xs"
                           >
-                            {PAISES.map(p => <option key={p} value={p}>{p}</option>)}
+                            {PAISES_ICAO.map(p => <option key={p.code} value={p.code}>{p.nome} ({p.code})</option>)}
                           </select>
                         </div>
+
                         <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">País de Residência *</label>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Local Nascimento (Opcional)</label>
+                          <input 
+                            type="text" 
+                            placeholder="Cidade" 
+                            value={novoBoletim.localNascimento} 
+                            onChange={e => setNovoBoletim({...novoBoletim, localNascimento: sanitizarTextoAIMA(e.target.value)})} 
+                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none font-medium text-xs uppercase" 
+                            maxLength={40}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">País de Residência (ICAO) *</label>
                           <select 
                             value={novoBoletim.paisResidencia} 
                             onChange={e => setNovoBoletim({...novoBoletim, paisResidencia: e.target.value})} 
-                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
+                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium text-xs"
                           >
-                            {PAISES.map(p => <option key={p} value={p}>{p}</option>)}
+                            {PAISES_ICAO.map(p => <option key={p.code} value={p.code}>{p.nome} ({p.code})</option>)}
                           </select>
                         </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Local Residência (Opcional)</label>
+                          <input 
+                            type="text" 
+                            placeholder="Cidade de residência habitual" 
+                            value={novoBoletim.localResidencia} 
+                            onChange={e => setNovoBoletim({...novoBoletim, localResidencia: sanitizarTextoAIMA(e.target.value)})} 
+                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none font-medium text-xs uppercase" 
+                            maxLength={30}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 3. Dados da Reserva */}
+                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
+                      <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">3. Dados da Reserva</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                         <div>
                           <label className="block text-xs font-semibold text-slate-700 mb-1">Tipo de Alojamento *</label>
                           <select 
                             value={novoBoletim.tipoAlojamento} 
                             onChange={e => setNovoBoletim({...novoBoletim, tipoAlojamento: e.target.value})} 
-                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
+                            className="w-full border border-slate-300 p-2 rounded bg-white text-xs"
                           >
                             {TIPOS_ALOJAMENTO.map(t => <option key={t} value={t}>{t}</option>)}
                           </select>
                         </div>
                         <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">Número do Alojamento / Unidade *</label>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Unidade *</label>
                           <input 
                             type="text" 
-                            placeholder="Ex: N.º 1, 102, R/C" 
                             value={novoBoletim.numeroUnidade} 
                             onChange={e => setNovoBoletim({...novoBoletim, numeroUnidade: e.target.value})} 
-                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none font-medium" 
+                            className="w-full border border-slate-300 p-2 rounded text-xs font-bold" 
                             required 
                           />
                         </div>
-                      </div>
-                    </div>
-
-                    {/* DADOS DA RESERVA */}
-                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
-                      <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">3. Dados da Reserva</h3>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">N.º de Reserva (opcional)</label>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">N.º Reserva</label>
                           <input 
                             type="text" 
-                            placeholder="Deixe em branco se não houver reserva" 
+                            placeholder="Opcional" 
                             value={novoBoletim.numeroReserva} 
                             onChange={e => handleNumeroReservaChange(e.target.value)} 
-                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none font-medium" 
+                            className="w-full border border-slate-300 p-2 rounded text-xs" 
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">Plataforma / Modo *</label>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Plataforma *</label>
                           <select 
                             value={novoBoletim.plataformaReserva} 
                             onChange={e => setNovoBoletim({...novoBoletim, plataformaReserva: e.target.value})} 
                             disabled={!novoBoletim.numeroReserva.trim()}
-                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium disabled:bg-slate-100 disabled:text-slate-500 cursor-pointer disabled:cursor-not-allowed"
+                            className="w-full border border-slate-300 p-2 rounded bg-white text-xs disabled:bg-slate-100"
                           >
                             {PLATAFORMAS_RESERVA.map(p => <option key={p} value={p}>{p}</option>)}
                           </select>
@@ -1008,17 +1011,13 @@
                     {novoBoletim.eMenor === 'Sim' && (
                       <div className="bg-purple-50 p-4 rounded-lg border border-purple-200 space-y-3">
                         <div className="flex items-center justify-between">
-                          <h3 className="font-bold text-purple-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
-                            👶 Hóspede Detetado como Menor de Idade ({idadeCalculada} anos)
+                          <h3 className="font-bold text-purple-900 text-xs uppercase tracking-wider">
+                            👶 Hóspede Menor de Idade ({idadeCalculada} anos)
                           </h3>
-                          <span className="text-[11px] font-bold bg-purple-200 text-purple-900 px-2 py-0.5 rounded">
-                            Requisito AIMA
-                          </span>
                         </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-purple-200 text-xs">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                           <div>
-                            <label className="block font-semibold text-purple-900 mb-1">Titular do Documento Apresentado *</label>
+                            <label className="block font-semibold text-purple-900 mb-1">Titular do Documento *</label>
                             <select 
                               value={novoBoletim.titularDoc} 
                               onChange={e => setNovoBoletim({...novoBoletim, titularDoc: e.target.value})} 
@@ -1049,338 +1048,4 @@
                     <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
                       <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">4. Período da Estadia, Pagamentos</h3>
                       
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">Data de Entrada (Check-in) *</label>
-                          <input 
-                            type="date" 
-                            value={novoBoletim.dataEntrada} 
-                            onChange={e => setNovoBoletim({...novoBoletim, dataEntrada: e.target.value})} 
-                            className="w-full border border-slate-300 p-2 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none" 
-                            required 
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">Data Prevista Saída (Check-out) *</label>
-                          <input 
-                            type="date" 
-                            value={novoBoletim.dataSaida} 
-                            onChange={e => setNovoBoletim({...novoBoletim, dataSaida: e.target.value})} 
-                            className="w-full border border-slate-300 p-2 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none" 
-                            required 
-                          />
-                        </div>
-                        <div className="bg-white border border-slate-300 p-2 rounded text-center">
-                          <span className="text-[10px] block text-slate-500 font-semibold uppercase">Duração da Estadia</span>
-                          <span className="text-xs font-bold text-blue-900">{numeroNoites} {numeroNoites === 1 ? 'Noite' : 'Noites'}</span>
-                        </div>
-                      </div>
-
-                      {/* PAINEL E AVISO DA TAXA TURÍSTICA DE MATOSINHOS */}
-                      <div className={`p-3.5 rounded-lg border text-xs space-y-2 transition-all ${
-                        taxaComAvisoErro 
-                          ? 'bg-rose-50 border-rose-400 text-rose-900 ring-2 ring-rose-500/30' 
-                          : 'bg-emerald-50 border-emerald-300 text-emerald-900'
-                      }`}>
-                        <div className="flex justify-between items-center font-bold">
-                          <span className="flex items-center gap-1.5">
-                            🏛️ Taxa Municipal Turística (Matosinhos):
-                          </span>
-                          <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-white border border-emerald-200">
-                            Sugestão: {taxaSugeridaMatosinhos.toFixed(2)} €
-                          </span>
-                        </div>
-
-                        {menorComTaxaIncorreta && (
-                          <div className="text-rose-700 font-bold bg-white p-2.5 rounded border border-rose-300 space-y-1">
-                            <div className="flex items-center gap-1 text-xs">
-                              ⚠️ <strong>Atenção ao Valor da Taxa:</strong> Hóspede tem apenas {idadeCalculada} anos!
-                            </div>
-                            <p className="text-[11px] font-normal text-rose-800">
-                              O Regulamento Municipal de Matosinhos estipula <strong>isenção total da taxa turística para menores de 16 anos</strong>. Recomendamos definir o valor para <strong>0.00 €</strong>.
-                            </p>
-                            <button 
-                              type="button" 
-                              onClick={() => setNovoBoletim({...novoBoletim, taxaTuristica: '0.00'})}
-                              className="mt-1 bg-rose-600 hover:bg-rose-700 text-white px-2.5 py-1 rounded text-[11px] font-bold"
-                            >
-                              Ajustar para 0.00 € (Isenção)
-                            </button>
-                          </div>
-                        )}
-
-                        {taxaExcedeLimiteMaximo && !menorComTaxaIncorreta && (
-                          <div className="text-rose-700 font-bold bg-white p-2.5 rounded border border-rose-300 space-y-1">
-                            <div className="flex items-center gap-1 text-xs">
-                              ⚠️ <strong>Atenção ao Valor da Taxa:</strong> O valor introduzido ({valorTaxaNum.toFixed(2)} €) excede o limite máximo legal!
-                            </div>
-                            <p className="text-[11px] font-normal text-rose-800">
-                              O Regulamento Municipal de Matosinhos limita a cobrança a um <strong>máximo de 7 noites consecutivas</strong> (7 x 2.00 € = <strong>14.00 € por pessoa/estadia</strong>).
-                            </p>
-                            <button 
-                              type="button" 
-                              onClick={() => setNovoBoletim({...novoBoletim, taxaTuristica: '14.00'})}
-                              className="mt-1 bg-rose-600 hover:bg-rose-700 text-white px-2.5 py-1 rounded text-[11px] font-bold"
-                            >
-                              Ajustar para 14.00 € (Teto Máximo)
-                            </button>
-                          </div>
-                        )}
-
-                        {!taxaComAvisoErro && (
-                          <div className="text-[11px] text-emerald-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-                            <span>
-                              {idadeCalculada !== null && idadeCalculada < 16 ? (
-                                <span>Isenção aplicada por idade (&lt; 16 anos).</span>
-                              ) : (
-                                <span>Cálculo: <strong>{noitesTributaveis} noites</strong> (máx. 7) x <strong>2.00 €/noite</strong> = <strong>{taxaSugeridaMatosinhos.toFixed(2)} €</strong></span>
-                              )}
-                            </span>
-                            
-                            <button 
-                              type="button" 
-                              onClick={() => setNovoBoletim({...novoBoletim, taxaTuristica: taxaSugeridaMatosinhos.toFixed(2)})}
-                              className="text-emerald-700 hover:text-emerald-950 font-bold underline cursor-pointer text-[11px]"
-                            >
-                              Aplicar valor sugerido ({taxaSugeridaMatosinhos.toFixed(2)} €)
-                            </button>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* VALOR RESERVA, TAXA TURÍSTICA E MODO PAGAMENTO */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-                        <div>
-                          <label className="block text-xs font-semibold text-emerald-800 mb-1">Valor Reserva (€)</label>
-                          <input 
-                            type="number" 
-                            step="0.01"
-                            placeholder="Ex: 150.00" 
-                            value={novoBoletim.valorReserva} 
-                            onChange={e => setNovoBoletim({...novoBoletim, valorReserva: e.target.value})} 
-                            className="w-full border border-emerald-300 p-2.5 rounded bg-emerald-50/50 font-bold text-emerald-900 focus:ring-2 focus:ring-emerald-500 outline-none" 
-                          />
-                        </div>
-                        <div>
-                          <label className={`block text-xs font-semibold mb-1 ${taxaComAvisoErro ? 'text-rose-700' : 'text-emerald-800'}`}>
-                            Taxa Turística (€) *
-                          </label>
-                          <input 
-                            type="number" 
-                            step="0.01"
-                            placeholder="Ex: 4.00" 
-                            value={novoBoletim.taxaTuristica} 
-                            onChange={e => setNovoBoletim({...novoBoletim, taxaTuristica: e.target.value})} 
-                            className={`w-full border p-2.5 rounded font-bold focus:ring-2 outline-none ${
-                              taxaComAvisoErro 
-                                ? 'border-rose-500 bg-rose-50 text-rose-900 focus:ring-rose-500' 
-                                : 'border-emerald-300 bg-emerald-50/50 text-emerald-900 focus:ring-emerald-500'
-                            }`} 
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-emerald-800 mb-1">Modo de Pagamento *</label>
-                          <select 
-                            value={novoBoletim.modoPagamento} 
-                            onChange={e => setNovoBoletim({...novoBoletim, modoPagamento: e.target.value})} 
-                            className="w-full border border-emerald-300 p-2.5 rounded bg-emerald-50/50 font-bold text-emerald-900 focus:ring-2 focus:ring-emerald-500 outline-none"
-                          >
-                            {MODOS_PAGAMENTO.map(m => <option key={m} value={m}>{m}</option>)}
-                          </select>
-                        </div>
-                      </div>
-
-                    </div>
-
-                    <button 
-                      type="submit" 
-                      disabled={loading}
-                      className="w-full bg-blue-700 text-white font-bold py-3.5 rounded-lg hover:bg-blue-800 transition shadow text-base disabled:bg-slate-400"
-                    >
-                      {loading ? 'A Guardar...' : '💾 Confirmar Check-in'}
-                    </button>
-                  </form>
-                </div>
-              )}
-            </div>
-
-            {/* PAINEL 3: EXPORTAÇÃO .CSV */}
-            <div className="bg-amber-50 p-5 rounded-xl border border-amber-300 shadow-sm space-y-3">
-              <div>
-                <h2 className="text-sm font-bold text-amber-900">📄 Gerador de Ficheiro .CSV para a AIMA</h2>
-                <p className="text-xs text-amber-700">Exporta registos de estrangeiros com reserva Booking/AirBnb ou pagamento MB/Booking.</p>
-              </div>
-
-              <form onSubmit={handleExportCSV} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end text-xs pt-2">
-                <div>
-                  <label className="block font-semibold text-amber-900 mb-1">Data Início Check-in</label>
-                  <input 
-                    type="date" 
-                    value={exportDataInicio} 
-                    onChange={e => setExportDataInicio(e.target.value)} 
-                    className="w-full border border-amber-300 p-2 rounded bg-white font-medium" 
-                    required 
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-amber-900 mb-1">Data Fim Check-in</label>
-                  <input 
-                    type="date" 
-                    value={exportDataFim} 
-                    onChange={e => setExportDataFim(e.target.value)} 
-                    className="w-full border border-amber-300 p-2 rounded bg-white font-medium" 
-                    required 
-                  />
-                </div>
-                <button 
-                  type="submit" 
-                  disabled={exporting}
-                  className="bg-amber-700 hover:bg-amber-800 text-white font-bold p-2.5 rounded transition shadow text-xs flex items-center justify-center gap-1 disabled:bg-slate-400"
-                >
-                  {exporting ? 'A Gerar .CSV...' : '📄 Descarregar .CSV (AIMA)'}
-                </button>
-              </form>
-            </div>
-
-          </main>
-
-          {/* MODAL: SOBRE O ESTABELECIMENTO */}
-          {showSobreModal && (
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-              <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200">
-                <div className="text-center border-b pb-3">
-                  <h2 className="text-lg font-bold text-slate-900">🏠 Casa Velha</h2>
-                  <p className="text-xs text-slate-500">Informação Legal, Registo de Alojamento Local</p>
-                </div>
-
-                <div className="space-y-3 text-xs text-slate-700">
-                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Registo RNAL:</span>
-                      <strong className="text-slate-900 font-mono">166503/AL</strong>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Data de Registo RNAL:</span>
-                      <strong className="text-slate-900">21-06-2025</strong>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Abertura ao Público:</span>
-                      <strong className="text-slate-900">23-02-2018</strong>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Título Autorização Utilização:</span>
-                      <strong className="text-slate-900 font-mono">N.º 63/18</strong>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Registo Oficial INE:</span>
-                      <strong className="text-slate-900">Sim</strong>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-2">
-                  <button 
-                    onClick={() => setShowSobreModal(false)}
-                    className="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-2.5 rounded-lg transition text-xs"
-                  >
-                    Fechar
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* MODAL DE SUCESSO & IMPRESSÃO */}
-          {ultimoSucesso && (
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-              <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-slate-200">
-                
-                <div id="printable-boletim" className="space-y-4 text-xs font-sans text-slate-800 p-2">
-                  <div className="text-center border-b pb-3">
-                    <h2 className="text-base font-bold text-slate-900">🏠 Casa Velha, Comprovativo de Check-in</h2>
-                    <p className="text-[11px] text-slate-500">Boletim de Alojamento (RNAL n.º 166503/AL)</p>
-                    <span className="inline-block mt-1 font-mono font-bold bg-blue-100 text-blue-900 px-2 py-0.5 rounded text-xs">
-                      ID Boletim: {ultimoSucesso.idBoletim}
-                    </span>
-                  </div>
-
-                  <div className="space-y-2 border-b pb-3">
-                    <div><strong className="text-slate-600">Hóspede:</strong> {ultimoSucesso.nome}</div>
-                    <div>
-                      <strong className="text-slate-600">Data de Nascimento:</strong> {ultimoSucesso.dataNascimento || 'N/A'} ({ultimoSucesso.eMenor === 'Sim' ? 'Menor' : 'Adulto'})
-                    </div>
-                    <div>
-                      <strong className="text-slate-600">Nacionalidade:</strong> {ultimoSucesso.nacionalidade || 'Portugal'} | <strong className="text-slate-600">Residência:</strong> {ultimoSucesso.paisResidencia || 'Portugal'}
-                    </div>
-                    <div>
-                      <strong className="text-slate-600">Documento:</strong> {ultimoSucesso.docTipo || 'Documento'} N.º {ultimoSucesso.docNumero} {ultimoSucesso.docPais && ultimoSucesso.docPais !== 'Portugal' ? `(${ultimoSucesso.docPais})` : ''}
-                    </div>
-                    <div>
-                      <strong className="text-slate-600">Reserva:</strong> {ultimoSucesso.numeroReserva ? ultimoSucesso.numeroReserva : 'sem reserva'} ({ultimoSucesso.plataformaReserva})
-                    </div>
-                    {ultimoSucesso.eMenor === 'Sim' && (
-                      <div className="p-2 bg-purple-50 rounded border border-purple-200">
-                        <strong>Informação de Menor:</strong> {ultimoSucesso.titularDoc} | Acompanhante: {ultimoSucesso.qualidadeAcompanhante}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-1 border-b pb-3">
-                    <div><strong className="text-slate-600">Alojamento:</strong> {ultimoSucesso.tipoAlojamento} (Unidade {ultimoSucesso.numeroUnidade})</div>
-                    <div className="flex justify-between items-center pr-2">
-                      <div>
-                        <strong className="text-slate-600">Check-in:</strong> {formatarDataLimpa(ultimoSucesso.dataEntrada)} → <strong className="text-slate-600">Check-out Previsto:</strong> {formatarDataLimpa(ultimoSucesso.dataSaida)}
-                      </div>
-                      {ultimoSucesso.noitesCalculadas > 0 && (
-                        <span className="font-bold text-blue-900 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 text-[11px]">
-                          {ultimoSucesso.noitesCalculadas} {ultimoSucesso.noitesCalculadas === 1 ? 'noite' : 'noites'}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200 space-y-1.5 font-medium text-emerald-900">
-                    <div className="font-bold border-b border-emerald-200 pb-1 text-[11px]">💳 Detalhes do Pagamento:</div>
-                    <div className="flex justify-between">
-                      <span>Valor da Reserva: <strong>{ultimoSucesso.valorReserva ? `${ultimoSucesso.valorReserva} €` : '0.00 €'}</strong></span>
-                      <span>Taxa Turística: <strong>{ultimoSucesso.taxaTuristica ? `${ultimoSucesso.taxaTuristica} €` : '0.00 €'}</strong></span>
-                    </div>
-                    <div>Modo de Pagamento: <strong>{ultimoSucesso.modoPagamento || 'Numerário'}</strong></div>
-                  </div>
-
-                  <div className="pt-2 text-right border-t border-slate-200">
-                    <div className="text-[10px] text-slate-500 font-mono">
-                      {ultimoSucesso.funcionarioId && ultimoSucesso.funcionarioId !== 'N/A' 
-                        ? `(ID: ${ultimoSucesso.funcionarioId})` 
-                        : (ultimoSucesso.funcionarioNome ? `(ID: ${ultimoSucesso.funcionarioNome})` : '(ID: EMP-001)')}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex gap-3 pt-2 border-t">
-                  <button 
-                    onClick={handlePrintBoletim}
-                    className="flex-1 bg-slate-800 hover:bg-slate-900 text-white font-bold py-2.5 rounded-lg transition text-xs flex items-center justify-center gap-1.5"
-                  >
-                    🖨️ Imprimir Boletim (PDF, Papel)
-                  </button>
-                  <button 
-                    onClick={() => setUltimoSucesso(null)}
-                    className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold px-4 py-2.5 rounded-lg transition text-xs"
-                  >
-                    Fechar
-                  </button>
-                </div>
-
-              </div>
-            </div>
-          )}
-
-        </div>
-      );
-    }
-
-    ReactDOM.createRoot(document.getElementById('root')).render(<CheckInAIMA />);
-  </script>
-</body>
-</html>
+                      <div className="grid grid-cols-1 sm
