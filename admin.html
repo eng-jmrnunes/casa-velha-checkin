@@ -40,7 +40,7 @@
       contactoEmail: "casavelha.alojamentolocal@gmail.com"
     };
 
-    // Formatação rigorosa de moedas (ex: 120.00 €)
+    // Formatação de moedas
     const formatarMoeda = (val) => {
       if (val === undefined || val === null || val === '') return '0.00 €';
       let str = String(val).replace('€', '').replace(/\s+/g, '').trim();
@@ -95,6 +95,9 @@
       const [registosAlojamento, setRegistosAlojamento] = useState([]);
       const [loadingData, setLoadingData] = useState(false);
       const [filtroTexto, setFiltroTexto] = useState('');
+      const [filtroDataInicio, setFiltroDataInicio] = useState('');
+      const [filtroDataFim, setFiltroDataFim] = useState('');
+      const [filtroPais, setFiltroPais] = useState('');
 
       // Estados para Filtro dos Gráficos
       const [graficoDataInicio, setGraficoDataInicio] = useState(inicioAnoStr);
@@ -108,8 +111,10 @@
       // Refs para os canvas do Chart.js
       const chartMensalRef = useRef(null);
       const chartPaisRef = useRef(null);
+      const chartPlataformaRef = useRef(null);
       const chartMensalInstance = useRef(null);
       const chartPaisInstance = useRef(null);
+      const chartPlataformaInstance = useRef(null);
 
       const handleLogin = (e) => {
         e.preventDefault();
@@ -148,7 +153,6 @@
         const end = new Date(graficoDataFim);
         end.setHours(23, 59, 59);
 
-        // Filtrar registos dentro da janela temporal definida para os gráficos
         const registosFiltradosGraficos = registosAlojamento.filter(r => {
           const checkInStr = r.Check_In || r.Data_Entrada || r[12];
           if (!checkInStr) return false;
@@ -156,19 +160,20 @@
           return dtIn >= start && dtIn <= end;
         });
 
-        // 1. Agrupamento por Mês (AAAA-MM)
         const totaisMensais = {};
-        // 2. Agrupamento por País de Origem (ICAO)
         const totaisPorPais = {};
+        const totaisPorPlataforma = {};
 
         registosFiltradosGraficos.forEach(r => {
           const dtStr = formatarDataIso(r.Check_In || r.Data_Entrada || r[12]);
-          const mesChave = dtStr.substring(0, 7); // AAAA-MM
+          const mesChave = dtStr.substring(0, 7);
           const pais = String(r.Nacionalidade || r.nacionalidade || r[5] || 'PRT').toUpperCase().trim();
+          const plataforma = String(r.Plataforma_Reserva || r.plataformaReserva || r[24] || 'sem reserva').trim();
           const valor = extrairValorNumerico(r.Valor_Reserva || r.valorReserva || r[19]);
 
           totaisMensais[mesChave] = (totaisMensais[mesChave] || 0) + valor;
           totaisPorPais[pais] = (totaisPorPais[pais] || 0) + valor;
+          totaisPorPlataforma[plataforma] = (totaisPorPlataforma[plataforma] || 0) + valor;
         });
 
         const labelsMensais = Object.keys(totaisMensais).sort();
@@ -177,7 +182,10 @@
         const labelsPais = Object.keys(totaisPorPais).sort((a,b) => totaisPorPais[b] - totaisPorPais[a]);
         const dataPais = labelsPais.map(k => totaisPorPais[k]);
 
-        // Renderização do Gráfico Mensal
+        const labelsPlataforma = Object.keys(totaisPorPlataforma).sort((a,b) => totaisPorPlataforma[b] - totaisPorPlataforma[a]);
+        const dataPlataforma = labelsPlataforma.map(k => totaisPorPlataforma[k]);
+
+        // Gráfico Mensal
         if (chartMensalRef.current) {
           if (chartMensalInstance.current) chartMensalInstance.current.destroy();
           chartMensalInstance.current = new Chart(chartMensalRef.current, {
@@ -196,9 +204,7 @@
             options: {
               responsive: true,
               maintainAspectRatio: false,
-              plugins: {
-                legend: { labels: { color: '#e2e8f0', font: { size: 11 } } }
-              },
+              plugins: { legend: { labels: { color: '#e2e8f0', font: { size: 11 } } } },
               scales: {
                 x: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
                 y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } }
@@ -207,7 +213,7 @@
           });
         }
 
-        // Renderização do Gráfico por País
+        // Gráfico por País
         if (chartPaisRef.current) {
           if (chartPaisInstance.current) chartPaisInstance.current.destroy();
           chartPaisInstance.current = new Chart(chartPaisRef.current, {
@@ -216,25 +222,40 @@
               labels: labelsPais.length > 0 ? labelsPais : ['Sem dados'],
               datasets: [{
                 data: dataPais.length > 0 ? dataPais : [1],
-                backgroundColor: [
-                  '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', 
-                  '#06b6d4', '#f97316', '#6366f1', '#14b8a6', '#64748b'
-                ]
+                backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#f97316', '#6366f1']
               }]
             },
             options: {
               responsive: true,
               maintainAspectRatio: false,
-              plugins: {
-                legend: { position: 'bottom', labels: { color: '#e2e8f0', font: { size: 10 } } }
-              }
+              plugins: { legend: { position: 'bottom', labels: { color: '#e2e8f0', font: { size: 10 } } } }
+            }
+          });
+        }
+
+        // Gráfico por Modo/Plataforma de Reserva
+        if (chartPlataformaRef.current) {
+          if (chartPlataformaInstance.current) chartPlataformaInstance.current.destroy();
+          chartPlataformaInstance.current = new Chart(chartPlataformaRef.current, {
+            type: 'pie',
+            data: {
+              labels: labelsPlataforma.length > 0 ? labelsPlataforma : ['Sem dados'],
+              datasets: [{
+                data: dataPlataforma.length > 0 ? dataPlataforma : [1],
+                backgroundColor: ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#f43f5e', '#64748b']
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { position: 'bottom', labels: { color: '#e2e8f0', font: { size: 10 } } } }
             }
           });
         }
 
       }, [autenticado, registosAlojamento, graficoDataInicio, graficoDataFim, showChartsGroup]);
 
-      // Procura e filtra apenas HÓSPEDES ESTRANGEIROS para o AIMA
+      // Procura e filtra hóspedes estrangeiros para o AIMA
       const handleProcurarEstrangeirosAIMA = async (e) => {
         e.preventDefault();
         if (!exportDataInicio || !exportDataFim) {
@@ -345,7 +366,6 @@
         try {
           let datLines = [];
 
-          // 1. REGISTO DE CABEÇALHO (TIPO 0)
           const rec0 = [
             "0",
             "BA03",
@@ -364,7 +384,6 @@
 
           datLines.push(rec0);
 
-          // 2. REGISTOS DE BOLETIM (TIPO 1)
           selecionados.forEach(h => {
             const apelido = sanitizarAlfaNome(h.Apelido || h.apelido || h[2] || '');
             const nome = sanitizarAlfaNome(h.Nome || h.nome || h[3] || '');
@@ -398,7 +417,6 @@
             datLines.push(rec1);
           });
 
-          // 3. REGISTO DE RESUMO (TIPO 9)
           const totalRegistos = datLines.length + 1;
           const dataHojeFormatada = formatarDataAIMA(new Date());
           const numSerieFormatted = String(numFicheiroSerie).padStart(5, '0');
@@ -470,16 +488,48 @@
         );
       }
 
+      // Lista única de Países para o Filtro por País
+      const paisesUnicos = Array.from(new Set(registosAlojamento.map(r => 
+        String(r.Nacionalidade || r[5] || '').toUpperCase().trim()
+      ))).filter(Boolean).sort();
+
+      // Aplicação dos Filtros do Histórico Geral
       const registosFiltrados = registosAlojamento.filter(r => {
-        if (!filtroTexto.trim()) return true;
-        const q = filtroTexto.toLowerCase();
-        return (
-          String(r.Apelido || r[2] || '').toLowerCase().includes(q) ||
-          String(r.Nome || r[3] || '').toLowerCase().includes(q) ||
-          String(r.Numero_Documento || r[8] || '').toLowerCase().includes(q) ||
-          String(r.ID_Boletim || r[0] || '').toLowerCase().includes(q)
-        );
+        // Texto livre
+        if (filtroTexto.trim()) {
+          const q = filtroTexto.toLowerCase();
+          const bateTexto = (
+            String(r.Apelido || r[2] || '').toLowerCase().includes(q) ||
+            String(r.Nome || r[3] || '').toLowerCase().includes(q) ||
+            String(r.Numero_Documento || r[8] || '').toLowerCase().includes(q) ||
+            String(r.ID_Boletim || r[0] || '').toLowerCase().includes(q)
+          );
+          if (!bateTexto) return false;
+        }
+
+        // Filtro por País
+        if (filtroPais) {
+          const nac = String(r.Nacionalidade || r[5] || '').toUpperCase().trim();
+          if (nac !== filtroPais) return false;
+        }
+
+        // Filtro por Datas de Check-in
+        const checkInStr = r.Check_In || r.Data_Entrada || r[12];
+        if (filtroDataInicio && checkInStr) {
+          if (new Date(checkInStr) < new Date(filtroDataInicio)) return false;
+        }
+        if (filtroDataFim && checkInStr) {
+          const dtFim = new Date(filtroDataFim);
+          dtFim.setHours(23, 59, 59);
+          if (new Date(checkInStr) > dtFim) return false;
+        }
+
+        return true;
       });
+
+      // Cálculo dos Totais da Tabela de Histórico
+      const totalEstadiasFiltradas = registosFiltrados.reduce((acc, r) => acc + extrairValorNumerico(r.Valor_Reserva || r[19]), 0);
+      const totalTaxasFiltradas = registosFiltrados.reduce((acc, r) => acc + extrairValorNumerico(r.Taxa_Turistica || r[20]), 0);
 
       return (
         <div className="min-h-screen pb-12">
@@ -644,7 +694,7 @@
                   <span className="text-xl">📈</span>
                   <div>
                     <h2 className="text-base font-bold text-blue-400">Análise Financeira & Gráficos Dinâmicos</h2>
-                    <p className="text-xs text-slate-300">Evolução de faturação mensal de estadias e distribuição por país de origem.</p>
+                    <p className="text-xs text-slate-300">Evolução mensal de faturação, distribuição por país e plataforma de reserva.</p>
                   </div>
                 </div>
                 <button type="button" className="text-slate-400 hover:text-white text-base font-bold p-1">
@@ -654,7 +704,7 @@
 
               {showChartsGroup && (
                 <div className="p-6 space-y-6">
-                  {/* Filtro de Datas para os Gráficos */}
+                  {/* Filtro de Datas dos Gráficos */}
                   <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-700 flex flex-col sm:flex-row items-end gap-4 text-xs">
                     <div className="flex-1 w-full">
                       <label className="block font-semibold text-slate-300 mb-1">Data Início Análise 📅</label>
@@ -676,18 +726,24 @@
                     </div>
                   </div>
 
-                  {/* Conteúdo dos Gráficos */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Conteúdo dos 3 Gráficos */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-700/60 space-y-3">
-                      <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider text-center">Faturação Mensal de Estadias (€)</h3>
-                      <div className="h-64 relative">
+                      <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider text-center">Faturação Mensal (€)</h3>
+                      <div className="h-60 relative">
                         <canvas ref={chartMensalRef}></canvas>
                       </div>
                     </div>
                     <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-700/60 space-y-3">
-                      <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider text-center">Faturação por País de Origem (ICAO)</h3>
-                      <div className="h-64 relative">
+                      <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider text-center">Por País de Origem (ICAO)</h3>
+                      <div className="h-60 relative">
                         <canvas ref={chartPaisRef}></canvas>
+                      </div>
+                    </div>
+                    <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-700/60 space-y-3">
+                      <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider text-center">Por Modo de Reserva</h3>
+                      <div className="h-60 relative">
+                        <canvas ref={chartPlataformaRef}></canvas>
                       </div>
                     </div>
                   </div>
@@ -695,7 +751,7 @@
               )}
             </section>
 
-            {/* GRUPO 3: HISTÓRICO GERAL COMPLETO */}
+            {/* GRUPO 3: HISTÓRICO GERAL COMPLETO COM FILTROS E TOTAIS */}
             <section className="bg-slate-800/80 border border-slate-700 rounded-2xl shadow-xl overflow-hidden transition">
               <div 
                 onClick={() => setShowHistoryGroup(!showHistoryGroup)}
@@ -715,20 +771,60 @@
 
               {showHistoryGroup && (
                 <div className="p-6 space-y-4">
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                    <div className="flex gap-2 w-full sm:w-auto">
+                  
+                  {/* BARRA DE FILTROS DO HISTÓRICO */}
+                  <div className="bg-slate-900/90 p-4 rounded-xl border border-slate-700/80 grid grid-cols-1 sm:grid-cols-5 gap-3 text-xs items-end">
+                    <div>
+                      <label className="block font-semibold text-slate-300 mb-1">Check-in De 📅</label>
+                      <input 
+                        type="date" 
+                        value={filtroDataInicio} 
+                        onChange={e => setFiltroDataInicio(e.target.value)} 
+                        className="w-full bg-slate-800 border border-slate-600 p-2 rounded text-white outline-none focus:border-amber-500 cursor-pointer"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-slate-300 mb-1">Check-in Até 📅</label>
+                      <input 
+                        type="date" 
+                        value={filtroDataFim} 
+                        onChange={e => setFiltroDataFim(e.target.value)} 
+                        className="w-full bg-slate-800 border border-slate-600 p-2 rounded text-white outline-none focus:border-amber-500 cursor-pointer"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-slate-300 mb-1">País de Origem 🌍</label>
+                      <select 
+                        value={filtroPais} 
+                        onChange={e => setFiltroPais(e.target.value)} 
+                        className="w-full bg-slate-800 border border-slate-600 p-2 rounded text-white outline-none focus:border-amber-500 font-mono"
+                      >
+                        <option value="">(Todos os países)</option>
+                        {paisesUnicos.map(p => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-slate-300 mb-1">Pesquisar Texto 🔍</label>
                       <input 
                         type="text" 
-                        placeholder="Filtrar por nome, doc ou ID..." 
+                        placeholder="Nome, doc ou ID..." 
                         value={filtroTexto}
                         onChange={e => setFiltroTexto(e.target.value)}
-                        className="bg-slate-900 border border-slate-700 px-3 py-2 rounded text-xs text-white outline-none w-full sm:w-64"
+                        className="w-full bg-slate-800 border border-slate-600 p-2 rounded text-white outline-none focus:border-amber-500"
                       />
+                    </div>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => { setFiltroDataInicio(''); setFiltroDataFim(''); setFiltroPais(''); setFiltroTexto(''); }}
+                        className="flex-1 bg-slate-700 hover:bg-slate-600 text-white p-2 rounded font-semibold text-xs transition"
+                      >
+                        Limpar
+                      </button>
                       <button 
                         onClick={carregarTodosRegistos}
-                        className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded text-xs"
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded text-xs font-semibold"
                       >
-                        🔄 Atualizar
+                        🔄
                       </button>
                     </div>
                   </div>
@@ -736,7 +832,7 @@
                   {loadingData ? (
                     <div className="text-center py-8 text-xs text-slate-400">A carregar a base de dados...</div>
                   ) : registosFiltrados.length === 0 ? (
-                    <div className="text-center py-8 text-xs text-slate-500">Nenhum registo encontrado.</div>
+                    <div className="text-center py-8 text-xs text-slate-500">Nenhum registo encontrado com os filtros aplicados.</div>
                   ) : (
                     <div className="overflow-x-auto border border-slate-700 rounded-lg">
                       <table className="w-full text-left text-xs divide-y divide-slate-700">
@@ -749,8 +845,8 @@
                             <th className="p-2.5">Check-in</th>
                             <th className="p-2.5">Check-out</th>
                             <th className="p-2.5">Reserva / Modo</th>
-                            <th className="p-2.5">Valor Estadia</th>
-                            <th className="p-2.5">Taxa Turística</th>
+                            <th className="p-2.5 text-right">Valor Estadia</th>
+                            <th className="p-2.5 text-right">Taxa Turística</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-700/50 bg-slate-900/50">
@@ -760,16 +856,31 @@
                               <td className="p-2.5 font-bold text-white">
                                 {r.Apelido || r[2] ? `${r.Apelido || r[2]}, ${r.Nome || r[3]}` : (r.Nome || r[3])}
                               </td>
-                              <td className="p-2.5 font-mono">{r.Nacionalidade || r[5]}</td>
+                              <td className="p-2.5 font-mono font-bold text-amber-300">{r.Nacionalidade || r[5]}</td>
                               <td className="p-2.5 font-mono">{r.Tipo_Documento || r[7]}: {r.Numero_Documento || r[8]}</td>
                               <td className="p-2.5 font-mono text-slate-200">{formatarDataIso(r.Check_In || r[12])}</td>
                               <td className="p-2.5 font-mono text-amber-300 font-semibold">{formatarDataIso(r.Check_Out || r[13])}</td>
                               <td className="p-2.5">{r.Numero_Reserva || r[23] || 'sem reserva'} <span className="text-slate-500">({r.Plataforma_Reserva || r[24] || '-'})</span></td>
-                              <td className="p-2.5 font-bold text-emerald-400">{formatarMoeda(r.Valor_Reserva || r[19])}</td>
-                              <td className="p-2.5 font-bold text-emerald-300">{formatarMoeda(r.Taxa_Turistica || r[20])}</td>
+                              <td className="p-2.5 text-right font-bold text-emerald-400">{formatarMoeda(r.Valor_Reserva || r[19])}</td>
+                              <td className="p-2.5 text-right font-bold text-emerald-300">{formatarMoeda(r.Taxa_Turistica || r[20])}</td>
                             </tr>
                           ))}
                         </tbody>
+
+                        {/* LINHA FINAL COM OS TOTAIS */}
+                        <tfoot className="bg-slate-950 font-bold text-xs text-white divide-t-2 divide-slate-700">
+                          <tr>
+                            <td colSpan="7" className="p-3 text-right uppercase tracking-wider text-slate-400">
+                              Totais ({registosFiltrados.length} registos):
+                            </td>
+                            <td className="p-3 text-right font-mono text-emerald-400 text-sm">
+                              {formatarMoeda(totalEstadiasFiltradas)}
+                            </td>
+                            <td className="p-3 text-right font-mono text-emerald-300 text-sm">
+                              {formatarMoeda(totalTaxasFiltradas)}
+                            </td>
+                          </tr>
+                        </tfoot>
                       </table>
                     </div>
                   )}
