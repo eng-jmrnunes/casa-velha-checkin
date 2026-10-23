@@ -8,8 +8,9 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    /* Forçar a exibição do ícone do calendário no input date */
+    /* Exibição do ícone do calendário nos inputs de data */
     input[type="date"]::-webkit-calendar-picker-indicator {
       cursor: pointer;
       filter: invert(0.8);
@@ -20,7 +21,7 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect } = React;
+    const { useState, useEffect, useRef } = React;
 
     const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzZitsCHoHUdgDwb2g8OrJEUm6tkXob-XhiywGuRt2ZAIPH9pwTWVvXGc2hQzA4psfbTg/exec";
 
@@ -39,7 +40,24 @@
       contactoEmail: "casavelha.alojamentolocal@gmail.com"
     };
 
-    // Função de auxílio para formatar datas estritamente no formato AAAA-MM-DD
+    // Formatação rigorosa de moedas (ex: 120.00 €)
+    const formatarMoeda = (val) => {
+      if (val === undefined || val === null || val === '') return '0.00 €';
+      let str = String(val).replace('€', '').replace(/\s+/g, '').trim();
+      str = str.replace(',', '.');
+      const num = parseFloat(str);
+      return isNaN(num) ? '0.00 €' : `${num.toFixed(2)} €`;
+    };
+
+    const extrairValorNumerico = (val) => {
+      if (val === undefined || val === null || val === '') return 0;
+      let str = String(val).replace('€', '').replace(/\s+/g, '').trim();
+      str = str.replace(',', '.');
+      const num = parseFloat(str);
+      return isNaN(num) ? 0 : num;
+    };
+
+    // Formatação de datas em AAAA-MM-DD
     const formatarDataIso = (dStr) => {
       if (!dStr) return '-';
       const str = String(dStr).trim();
@@ -62,19 +80,36 @@
       const [erroPin, setErroPin] = useState('');
 
       const todayStr = new Date().toISOString().slice(0, 10);
+      const anoAtual = new Date().getFullYear();
+      const inicioAnoStr = `${anoAtual}-01-01`;
+
+      // Estados para o Gerador AIMA
       const [exportDataInicio, setExportDataInicio] = useState(todayStr);
       const [exportDataFim, setExportDataFim] = useState(todayStr);
       const [numFicheiroSerie, setNumFicheiroSerie] = useState('00001');
-
-      // Tabela de Preparação para AIMA
       const [estrangeirosAIMA, setEstrangeirosAIMA] = useState([]);
       const [carregandoEstrangeiros, setCarregandoEstrangeiros] = useState(false);
       const [exporting, setExporting] = useState(false);
 
-      // Tabela do Histórico Geral (Nacionais e Estrangeiros)
+      // Estados para o Histórico Geral
       const [registosAlojamento, setRegistosAlojamento] = useState([]);
       const [loadingData, setLoadingData] = useState(false);
       const [filtroTexto, setFiltroTexto] = useState('');
+
+      // Estados para Filtro dos Gráficos
+      const [graficoDataInicio, setGraficoDataInicio] = useState(inicioAnoStr);
+      const [graficoDataFim, setGraficoDataFim] = useState(todayStr);
+
+      // Estados para Controlo de Grupos Colapsáveis
+      const [showAimaGroup, setShowAimaGroup] = useState(true);
+      const [showChartsGroup, setShowChartsGroup] = useState(true);
+      const [showHistoryGroup, setShowHistoryGroup] = useState(true);
+
+      // Refs para os canvas do Chart.js
+      const chartMensalRef = useRef(null);
+      const chartPaisRef = useRef(null);
+      const chartMensalInstance = useRef(null);
+      const chartPaisInstance = useRef(null);
 
       const handleLogin = (e) => {
         e.preventDefault();
@@ -87,7 +122,6 @@
         }
       };
 
-      // Carrega rigorosamente TODOS os registos (Nacionais e Estrangeiros)
       const carregarTodosRegistos = async () => {
         setLoadingData(true);
         try {
@@ -106,7 +140,101 @@
         }
       };
 
-      // Procura e filtra apenas HÓSPEDES ESTRANGEIROS no intervalo de check-in definido
+      // Atualização dos Gráficos Dinâmicos
+      useEffect(() => {
+        if (!autenticado || registosAlojamento.length === 0 || !showChartsGroup) return;
+
+        const start = new Date(graficoDataInicio);
+        const end = new Date(graficoDataFim);
+        end.setHours(23, 59, 59);
+
+        // Filtrar registos dentro da janela temporal definida para os gráficos
+        const registosFiltradosGraficos = registosAlojamento.filter(r => {
+          const checkInStr = r.Check_In || r.Data_Entrada || r[12];
+          if (!checkInStr) return false;
+          const dtIn = new Date(checkInStr);
+          return dtIn >= start && dtIn <= end;
+        });
+
+        // 1. Agrupamento por Mês (AAAA-MM)
+        const totaisMensais = {};
+        // 2. Agrupamento por País de Origem (ICAO)
+        const totaisPorPais = {};
+
+        registosFiltradosGraficos.forEach(r => {
+          const dtStr = formatarDataIso(r.Check_In || r.Data_Entrada || r[12]);
+          const mesChave = dtStr.substring(0, 7); // AAAA-MM
+          const pais = String(r.Nacionalidade || r.nacionalidade || r[5] || 'PRT').toUpperCase().trim();
+          const valor = extrairValorNumerico(r.Valor_Reserva || r.valorReserva || r[19]);
+
+          totaisMensais[mesChave] = (totaisMensais[mesChave] || 0) + valor;
+          totaisPorPais[pais] = (totaisPorPais[pais] || 0) + valor;
+        });
+
+        const labelsMensais = Object.keys(totaisMensais).sort();
+        const dataMensais = labelsMensais.map(k => totaisMensais[k]);
+
+        const labelsPais = Object.keys(totaisPorPais).sort((a,b) => totaisPorPais[b] - totaisPorPais[a]);
+        const dataPais = labelsPais.map(k => totaisPorPais[k]);
+
+        // Renderização do Gráfico Mensal
+        if (chartMensalRef.current) {
+          if (chartMensalInstance.current) chartMensalInstance.current.destroy();
+          chartMensalInstance.current = new Chart(chartMensalRef.current, {
+            type: 'bar',
+            data: {
+              labels: labelsMensais.length > 0 ? labelsMensais : ['Sem dados'],
+              datasets: [{
+                label: 'Faturação Estadias (€)',
+                data: dataMensais.length > 0 ? dataMensais : [0],
+                backgroundColor: 'rgba(245, 158, 11, 0.85)',
+                borderColor: 'rgba(245, 158, 11, 1)',
+                borderWidth: 1,
+                borderRadius: 4
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { labels: { color: '#e2e8f0', font: { size: 11 } } }
+              },
+              scales: {
+                x: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } }
+              }
+            }
+          });
+        }
+
+        // Renderização do Gráfico por País
+        if (chartPaisRef.current) {
+          if (chartPaisInstance.current) chartPaisInstance.current.destroy();
+          chartPaisInstance.current = new Chart(chartPaisRef.current, {
+            type: 'doughnut',
+            data: {
+              labels: labelsPais.length > 0 ? labelsPais : ['Sem dados'],
+              datasets: [{
+                data: dataPais.length > 0 ? dataPais : [1],
+                backgroundColor: [
+                  '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', 
+                  '#06b6d4', '#f97316', '#6366f1', '#14b8a6', '#64748b'
+                ]
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { position: 'bottom', labels: { color: '#e2e8f0', font: { size: 10 } } }
+              }
+            }
+          });
+        }
+
+      }, [autenticado, registosAlojamento, graficoDataInicio, graficoDataFim, showChartsGroup]);
+
+      // Procura e filtra apenas HÓSPEDES ESTRANGEIROS para o AIMA
       const handleProcurarEstrangeirosAIMA = async (e) => {
         e.preventDefault();
         if (!exportDataInicio || !exportDataFim) {
@@ -121,10 +249,7 @@
           const response = await fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({
-              action: "SEARCH_GUEST",
-              query: ""
-            })
+            body: JSON.stringify({ action: "SEARCH_GUEST", query: "" })
           });
 
           const result = await response.json();
@@ -136,11 +261,9 @@
             const end = new Date(exportDataFim);
             end.setHours(23, 59, 59);
 
-            // Filtro: Check-in dentro do intervalo E Nacionalidade diferente de PRT / Portugal
             const filtrados = todos.filter(h => {
               const checkInStr = h.Check_In || h.Data_Entrada || h[12];
               const nac = String(h.Nacionalidade || h.nacionalidade || h[5] || '').toUpperCase().trim();
-
               const eEstrangeiro = nac !== 'PRT' && nac !== 'PORTUGAL' && nac !== '';
 
               if (checkInStr && eEstrangeiro) {
@@ -151,7 +274,7 @@
             }).map((h, index) => ({
               ...h,
               _tempId: index,
-              _selecionado: true // Por defeito vêm selecionados para exportação
+              _selecionado: true
             }));
 
             setEstrangeirosAIMA(filtrados);
@@ -178,7 +301,6 @@
         setEstrangeirosAIMA(prev => prev.map(item => ({ ...item, _selecionado: !todosSelecionados })));
       };
 
-      // Formatação de Datas para AAAAMMDD (Formato estipulado AIMA)
       const formatarDataAIMA = (dStr) => {
         if (!dStr) return '';
         const str = String(dStr).trim();
@@ -210,7 +332,6 @@
         return String(txt).toUpperCase().replace(/[^A-Z0-9]/g, '').trim().slice(0, max);
       };
 
-      // Gera o ficheiro .DAT usando EXCLUSIVAMENTE os registos selecionados pelo utilizador
       const handleExportDAT = () => {
         const selecionados = estrangeirosAIMA.filter(i => i._selecionado);
 
@@ -243,7 +364,7 @@
 
           datLines.push(rec0);
 
-          // 2. REGISTOS DE BOLETIM (TIPO 1) - Apenas os selecionados
+          // 2. REGISTOS DE BOLETIM (TIPO 1)
           selecionados.forEach(h => {
             const apelido = sanitizarAlfaNome(h.Apelido || h.apelido || h[2] || '');
             const nome = sanitizarAlfaNome(h.Nome || h.nome || h[3] || '');
@@ -278,7 +399,7 @@
           });
 
           // 3. REGISTO DE RESUMO (TIPO 9)
-          const totalRegistos = datLines.length + 1; // Inclui o próprio registo 9
+          const totalRegistos = datLines.length + 1;
           const dataHojeFormatada = formatarDataAIMA(new Date());
           const numSerieFormatted = String(numFicheiroSerie).padStart(5, '0');
 
@@ -291,7 +412,6 @@
 
           datLines.push(rec9);
 
-          // Nomenclatura: <NIF><Estabelecimento><NumeroFicheiro>.DAT
           const nomeFicheiroDAT = `${UH_CONFIG.nif}${UH_CONFIG.estabelecimento}${numSerieFormatted}.DAT`;
           const datContent = datLines.join("\r\n");
 
@@ -384,129 +504,203 @@
 
           <main className="max-w-6xl mx-auto p-4 mt-6 space-y-8">
 
-            {/* PAINEL AIMA: SELEÇÃO DE DATAS E GERAÇÃO .DAT */}
-            <section className="bg-slate-800/80 border border-amber-500/30 p-6 rounded-2xl shadow-xl space-y-5">
-              <div className="flex items-center gap-2 border-b border-slate-700 pb-3">
-                <span className="text-xl">📄</span>
-                <div>
-                  <h2 className="text-base font-bold text-amber-400">Gerador do Ficheiro .DAT para a AIMA</h2>
-                  <p className="text-xs text-slate-300">Escolha as datas de check-in, pesquise os estrangeiros e selecione manualmente quem incluir no ficheiro.</p>
+            {/* GRUPO 1: GERADOR AIMA .DAT */}
+            <section className="bg-slate-800/80 border border-amber-500/30 rounded-2xl shadow-xl overflow-hidden transition">
+              <div 
+                onClick={() => setShowAimaGroup(!showAimaGroup)}
+                className="p-5 bg-slate-900/60 flex justify-between items-center cursor-pointer select-none border-b border-slate-700/50 hover:bg-slate-800 transition"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">📄</span>
+                  <div>
+                    <h2 className="text-base font-bold text-amber-400">Gerador do Ficheiro .DAT para a AIMA</h2>
+                    <p className="text-xs text-slate-300">Escolha as datas de check-in, pesquise os estrangeiros e selecione manualmente quem incluir no ficheiro.</p>
+                  </div>
                 </div>
+                <button type="button" className="text-slate-400 hover:text-white text-base font-bold p-1">
+                  {showAimaGroup ? '▲' : '▼'}
+                </button>
               </div>
 
-              {/* FORMULÁRIO DE PESQUISA POR DATA */}
-              <form onSubmit={handleProcurarEstrangeirosAIMA} className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end text-xs">
-                <div>
-                  <label className="block font-semibold text-slate-300 mb-1">Data Início (Check-in) 📅</label>
-                  <input 
-                    type="date" 
-                    value={exportDataInicio} 
-                    onChange={e => setExportDataInicio(e.target.value)} 
-                    className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-lg text-white font-medium outline-none focus:border-amber-500 cursor-pointer" 
-                    required 
-                  />
+              {showAimaGroup && (
+                <div className="p-6 space-y-5">
+                  <form onSubmit={handleProcurarEstrangeirosAIMA} className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end text-xs">
+                    <div>
+                      <label className="block font-semibold text-slate-300 mb-1">Data Início (Check-in) 📅</label>
+                      <input 
+                        type="date" 
+                        value={exportDataInicio} 
+                        onChange={e => setExportDataInicio(e.target.value)} 
+                        className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-lg text-white font-medium outline-none focus:border-amber-500 cursor-pointer" 
+                        required 
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-slate-300 mb-1">Data Fim (Check-in) 📅</label>
+                      <input 
+                        type="date" 
+                        value={exportDataFim} 
+                        onChange={e => setExportDataFim(e.target.value)} 
+                        className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-lg text-white font-medium outline-none focus:border-amber-500 cursor-pointer" 
+                        required 
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-slate-300 mb-1">N.º Série Ficheiro</label>
+                      <input 
+                        type="number" 
+                        value={numFicheiroSerie} 
+                        onChange={e => setNumFicheiroSerie(e.target.value)} 
+                        className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-lg text-white font-mono text-center outline-none focus:border-amber-500" 
+                        min="1"
+                        max="99999"
+                        required 
+                      />
+                    </div>
+                    <button 
+                      type="submit" 
+                      disabled={carregandoEstrangeiros}
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition shadow flex items-center justify-center gap-2 disabled:bg-slate-700"
+                    >
+                      {carregandoEstrangeiros ? 'A Pesquisar...' : '🔍 Procurar Hóspedes'}
+                    </button>
+                  </form>
+
+                  {estrangeirosAIMA.length > 0 && (
+                    <div className="space-y-3 pt-3 border-t border-slate-700">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                        <span className="text-xs font-bold text-slate-200">
+                          Hóspedes Estrangeiros Encontrados: <span className="text-amber-400">{estrangeirosAIMA.length}</span> | Selecionados: <span className="text-emerald-400">{estrangeirosAIMA.filter(i => i._selecionado).length}</span>
+                        </span>
+                        <button 
+                          type="button" 
+                          onClick={toggleSelecionarTodos} 
+                          className="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded text-slate-200 font-semibold"
+                        >
+                          {estrangeirosAIMA.every(i => i._selecionado) ? 'Desselecionar Todos' : 'Selecionar Todos'}
+                        </button>
+                      </div>
+
+                      <div className="overflow-x-auto border border-slate-700 rounded-lg">
+                        <table className="w-full text-left text-xs divide-y divide-slate-700">
+                          <thead className="bg-slate-900 text-slate-300 font-semibold uppercase">
+                            <tr>
+                              <th className="p-3 text-center w-12">Enviar</th>
+                              <th className="p-3">Hóspede (Apelido, Nome)</th>
+                              <th className="p-3">Nacionalidade</th>
+                              <th className="p-3">Documento</th>
+                              <th className="p-3">Check-in</th>
+                              <th className="p-3">Check-out</th>
+                              <th className="p-3">Valor Estadia</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-700/60 bg-slate-900/50">
+                            {estrangeirosAIMA.map((item) => (
+                              <tr key={item._tempId} className={`hover:bg-slate-700/40 ${item._selecionado ? 'bg-amber-950/20' : 'opacity-60'}`}>
+                                <td className="p-3 text-center">
+                                  <input 
+                                    type="checkbox" 
+                                    checked={item._selecionado} 
+                                    onChange={() => toggleSelecaoRegisto(item._tempId)} 
+                                    className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
+                                  />
+                                </td>
+                                <td className="p-3 font-bold text-white">
+                                  {item.Apelido || item.apelido || item[2] ? `${item.Apelido || item.apelido || item[2]}, ${item.Nome || item.nome || item[3]}` : (item.Nome || item[3])}
+                                </td>
+                                <td className="p-3 font-mono font-bold text-amber-300">{item.Nacionalidade || item.nacionalidade || item[5]}</td>
+                                <td className="p-3 font-mono">{item.Tipo_Documento || item.docTipo || item[7]}: {item.Numero_Documento || item.docNumero || item[8]}</td>
+                                <td className="p-3 font-mono text-slate-200">{formatarDataIso(item.Check_In || item.Data_Entrada || item[12])}</td>
+                                <td className="p-3 font-mono text-amber-300">{formatarDataIso(item.Check_Out || item.Data_Saida || item[13])}</td>
+                                <td className="p-3 font-bold text-emerald-400">{formatarMoeda(item.Valor_Reserva || item.valorReserva || item[19])}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div className="pt-2 flex justify-end">
+                        <button 
+                          onClick={handleExportDAT}
+                          disabled={exporting || estrangeirosAIMA.filter(i => i._selecionado).length === 0}
+                          className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-6 py-3 rounded-lg transition shadow-lg text-xs flex items-center gap-2 disabled:bg-slate-700"
+                        >
+                          {exporting ? 'A Gerar...' : '📄 Descarregar .DAT da Seleção (AIMA)'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <label className="block font-semibold text-slate-300 mb-1">Data Fim (Check-in) 📅</label>
-                  <input 
-                    type="date" 
-                    value={exportDataFim} 
-                    onChange={e => setExportDataFim(e.target.value)} 
-                    className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-lg text-white font-medium outline-none focus:border-amber-500 cursor-pointer" 
-                    required 
-                  />
+              )}
+            </section>
+
+            {/* GRUPO 2: GRÁFICOS & ANÁLISE FINANCEIRA */}
+            <section className="bg-slate-800/80 border border-blue-500/30 rounded-2xl shadow-xl overflow-hidden transition">
+              <div 
+                onClick={() => setShowChartsGroup(!showChartsGroup)}
+                className="p-5 bg-slate-900/60 flex justify-between items-center cursor-pointer select-none border-b border-slate-700/50 hover:bg-slate-800 transition"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">📈</span>
+                  <div>
+                    <h2 className="text-base font-bold text-blue-400">Análise Financeira & Gráficos Dinâmicos</h2>
+                    <p className="text-xs text-slate-300">Evolução de faturação mensal de estadias e distribuição por país de origem.</p>
+                  </div>
                 </div>
-                <div>
-                  <label className="block font-semibold text-slate-300 mb-1">N.º Série Ficheiro</label>
-                  <input 
-                    type="number" 
-                    value={numFicheiroSerie} 
-                    onChange={e => setNumFicheiroSerie(e.target.value)} 
-                    className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-lg text-white font-mono text-center outline-none focus:border-amber-500" 
-                    min="1"
-                    max="99999"
-                    required 
-                  />
-                </div>
-                <button 
-                  type="submit" 
-                  disabled={carregandoEstrangeiros}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition shadow flex items-center justify-center gap-2 disabled:bg-slate-700"
-                >
-                  {carregandoEstrangeiros ? 'A Pesquisar...' : '🔍 Procurar Hóspedes'}
+                <button type="button" className="text-slate-400 hover:text-white text-base font-bold p-1">
+                  {showChartsGroup ? '▲' : '▼'}
                 </button>
-              </form>
+              </div>
 
-              {/* TABELA DE REGISTOS ESTRANGEIROS ENCONTRADOS E SELEÇÃO */}
-              {estrangeirosAIMA.length > 0 && (
-                <div className="space-y-3 pt-3 border-t border-slate-700">
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-                    <span className="text-xs font-bold text-slate-200">
-                      Hóspedes Estrangeiros Encontrados: <span className="text-amber-400">{estrangeirosAIMA.length}</span> | Selecionados: <span className="text-emerald-400">{estrangeirosAIMA.filter(i => i._selecionado).length}</span>
-                    </span>
-                    <button 
-                      type="button" 
-                      onClick={toggleSelecionarTodos} 
-                      className="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded text-slate-200 font-semibold"
-                    >
-                      {estrangeirosAIMA.every(i => i._selecionado) ? 'Desselecionar Todos' : 'Selecionar Todos'}
-                    </button>
+              {showChartsGroup && (
+                <div className="p-6 space-y-6">
+                  {/* Filtro de Datas para os Gráficos */}
+                  <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-700 flex flex-col sm:flex-row items-end gap-4 text-xs">
+                    <div className="flex-1 w-full">
+                      <label className="block font-semibold text-slate-300 mb-1">Data Início Análise 📅</label>
+                      <input 
+                        type="date" 
+                        value={graficoDataInicio} 
+                        onChange={e => setGraficoDataInicio(e.target.value)} 
+                        className="w-full bg-slate-800 border border-slate-600 p-2.5 rounded-lg text-white font-medium outline-none focus:border-blue-500 cursor-pointer"
+                      />
+                    </div>
+                    <div className="flex-1 w-full">
+                      <label className="block font-semibold text-slate-300 mb-1">Data Fim Análise 📅</label>
+                      <input 
+                        type="date" 
+                        value={graficoDataFim} 
+                        onChange={e => setGraficoDataFim(e.target.value)} 
+                        className="w-full bg-slate-800 border border-slate-600 p-2.5 rounded-lg text-white font-medium outline-none focus:border-blue-500 cursor-pointer"
+                      />
+                    </div>
                   </div>
 
-                  <div className="overflow-x-auto border border-slate-700 rounded-lg">
-                    <table className="w-full text-left text-xs divide-y divide-slate-700">
-                      <thead className="bg-slate-900 text-slate-300 font-semibold uppercase">
-                        <tr>
-                          <th className="p-3 text-center w-12">Enviar</th>
-                          <th className="p-3">Hóspede (Apelido, Nome)</th>
-                          <th className="p-3">Nacionalidade</th>
-                          <th className="p-3">Documento</th>
-                          <th className="p-3">Check-in</th>
-                          <th className="p-3">Check-out</th>
-                          <th className="p-3">Valor Estadia</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-700/60 bg-slate-900/50">
-                        {estrangeirosAIMA.map((item) => (
-                          <tr key={item._tempId} className={`hover:bg-slate-700/40 ${item._selecionado ? 'bg-amber-950/20' : 'opacity-60'}`}>
-                            <td className="p-3 text-center">
-                              <input 
-                                type="checkbox" 
-                                checked={item._selecionado} 
-                                onChange={() => toggleSelecaoRegisto(item._tempId)} 
-                                className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
-                              />
-                            </td>
-                            <td className="p-3 font-bold text-white">
-                              {item.Apelido || item.apelido || item[2] ? `${item.Apelido || item.apelido || item[2]}, ${item.Nome || item.nome || item[3]}` : (item.Nome || item[3])}
-                            </td>
-                            <td className="p-3 font-mono font-bold text-amber-300">{item.Nacionalidade || item.nacionalidade || item[5]}</td>
-                            <td className="p-3 font-mono">{item.Tipo_Documento || item.docTipo || item[7]}: {item.Numero_Documento || item.docNumero || item[8]}</td>
-                            <td className="p-3 font-mono text-slate-200">{formatarDataIso(item.Check_In || item.Data_Entrada || item[12])}</td>
-                            <td className="p-3 font-mono text-amber-300">{formatarDataIso(item.Check_Out || item.Data_Saida || item[13])}</td>
-                            <td className="p-3 font-bold text-emerald-400">{item.Valor_Reserva || item.valorReserva || item[19] || '0.00 €'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <div className="pt-2 flex justify-end">
-                    <button 
-                      onClick={handleExportDAT}
-                      disabled={exporting || estrangeirosAIMA.filter(i => i._selecionado).length === 0}
-                      className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-6 py-3 rounded-lg transition shadow-lg text-xs flex items-center gap-2 disabled:bg-slate-700"
-                    >
-                      {exporting ? 'A Gerar...' : '📄 Descarregar .DAT da Seleção (AIMA)'}
-                    </button>
+                  {/* Conteúdo dos Gráficos */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-700/60 space-y-3">
+                      <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider text-center">Faturação Mensal de Estadias (€)</h3>
+                      <div className="h-64 relative">
+                        <canvas ref={chartMensalRef}></canvas>
+                      </div>
+                    </div>
+                    <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-700/60 space-y-3">
+                      <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider text-center">Faturação por País de Origem (ICAO)</h3>
+                      <div className="h-64 relative">
+                        <canvas ref={chartPaisRef}></canvas>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
             </section>
 
-            {/* PAINEL HISTÓRICO GERAL COMPLETO (NACIONAIS E ESTRANGEIROS) */}
-            <section className="bg-slate-800/80 border border-slate-700 p-6 rounded-2xl shadow-xl space-y-4">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-700 pb-3">
+            {/* GRUPO 3: HISTÓRICO GERAL COMPLETO */}
+            <section className="bg-slate-800/80 border border-slate-700 rounded-2xl shadow-xl overflow-hidden transition">
+              <div 
+                onClick={() => setShowHistoryGroup(!showHistoryGroup)}
+                className="p-5 bg-slate-900/60 flex justify-between items-center cursor-pointer select-none border-b border-slate-700/50 hover:bg-slate-800 transition"
+              >
                 <div className="flex items-center gap-2">
                   <span className="text-xl">📊</span>
                   <div>
@@ -514,61 +708,71 @@
                     <p className="text-xs text-slate-400">Base de dados completa (Hóspedes Nacionais e Estrangeiros): {registosAlojamento.length} registo(s)</p>
                   </div>
                 </div>
-                <div className="flex gap-2 w-full sm:w-auto">
-                  <input 
-                    type="text" 
-                    placeholder="Filtrar por nome, doc ou ID..." 
-                    value={filtroTexto}
-                    onChange={e => setFiltroTexto(e.target.value)}
-                    className="bg-slate-900 border border-slate-700 px-3 py-1.5 rounded text-xs text-white outline-none w-full sm:w-64"
-                  />
-                  <button 
-                    onClick={carregarTodosRegistos}
-                    className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded text-xs"
-                  >
-                    🔄
-                  </button>
-                </div>
+                <button type="button" className="text-slate-400 hover:text-white text-base font-bold p-1">
+                  {showHistoryGroup ? '▲' : '▼'}
+                </button>
               </div>
 
-              {loadingData ? (
-                <div className="text-center py-8 text-xs text-slate-400">A carregar a base de dados...</div>
-              ) : registosFiltrados.length === 0 ? (
-                <div className="text-center py-8 text-xs text-slate-500">Nenhum registo encontrado.</div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs divide-y divide-slate-700">
-                    <thead className="bg-slate-900 text-slate-400 font-semibold uppercase">
-                      <tr>
-                        <th className="p-2.5">ID Boletim</th>
-                        <th className="p-2.5">Hóspede (Apelido, Nome)</th>
-                        <th className="p-2.5">ICAO</th>
-                        <th className="p-2.5">Documento</th>
-                        <th className="p-2.5">Check-in</th>
-                        <th className="p-2.5">Check-out</th>
-                        <th className="p-2.5">Reserva / Modo</th>
-                        <th className="p-2.5">Valor Estadia</th>
-                        <th className="p-2.5">Taxa Turística</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-700/50">
-                      {registosFiltrados.map((r, idx) => (
-                        <tr key={idx} className="hover:bg-slate-700/30">
-                          <td className="p-2.5 font-mono text-amber-400">{r.ID_Boletim || r[0] || '-'}</td>
-                          <td className="p-2.5 font-bold text-white">
-                            {r.Apelido || r[2] ? `${r.Apelido || r[2]}, ${r.Nome || r[3]}` : (r.Nome || r[3])}
-                          </td>
-                          <td className="p-2.5 font-mono">{r.Nacionalidade || r[5]}</td>
-                          <td className="p-2.5 font-mono">{r.Tipo_Documento || r[7]}: {r.Numero_Documento || r[8]}</td>
-                          <td className="p-2.5 font-mono text-slate-200">{formatarDataIso(r.Check_In || r[12])}</td>
-                          <td className="p-2.5 font-mono text-amber-300 font-semibold">{formatarDataIso(r.Check_Out || r[13])}</td>
-                          <td className="p-2.5">{r.Numero_Reserva || r[23] || 'sem reserva'} <span className="text-slate-500">({r.Plataforma_Reserva || r[24] || '-'})</span></td>
-                          <td className="p-2.5 font-bold text-emerald-400">{r.Valor_Reserva || r[19] || '0.00 €'}</td>
-                          <td className="p-2.5 font-bold text-emerald-300">{r.Taxa_Turistica || r[20] || '0.00 €'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+              {showHistoryGroup && (
+                <div className="p-6 space-y-4">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <div className="flex gap-2 w-full sm:w-auto">
+                      <input 
+                        type="text" 
+                        placeholder="Filtrar por nome, doc ou ID..." 
+                        value={filtroTexto}
+                        onChange={e => setFiltroTexto(e.target.value)}
+                        className="bg-slate-900 border border-slate-700 px-3 py-2 rounded text-xs text-white outline-none w-full sm:w-64"
+                      />
+                      <button 
+                        onClick={carregarTodosRegistos}
+                        className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded text-xs"
+                      >
+                        🔄 Atualizar
+                      </button>
+                    </div>
+                  </div>
+
+                  {loadingData ? (
+                    <div className="text-center py-8 text-xs text-slate-400">A carregar a base de dados...</div>
+                  ) : registosFiltrados.length === 0 ? (
+                    <div className="text-center py-8 text-xs text-slate-500">Nenhum registo encontrado.</div>
+                  ) : (
+                    <div className="overflow-x-auto border border-slate-700 rounded-lg">
+                      <table className="w-full text-left text-xs divide-y divide-slate-700">
+                        <thead className="bg-slate-900 text-slate-400 font-semibold uppercase">
+                          <tr>
+                            <th className="p-2.5">ID Boletim</th>
+                            <th className="p-2.5">Hóspede (Apelido, Nome)</th>
+                            <th className="p-2.5">ICAO</th>
+                            <th className="p-2.5">Documento</th>
+                            <th className="p-2.5">Check-in</th>
+                            <th className="p-2.5">Check-out</th>
+                            <th className="p-2.5">Reserva / Modo</th>
+                            <th className="p-2.5">Valor Estadia</th>
+                            <th className="p-2.5">Taxa Turística</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-700/50 bg-slate-900/50">
+                          {registosFiltrados.map((r, idx) => (
+                            <tr key={idx} className="hover:bg-slate-700/30">
+                              <td className="p-2.5 font-mono text-amber-400">{r.ID_Boletim || r[0] || '-'}</td>
+                              <td className="p-2.5 font-bold text-white">
+                                {r.Apelido || r[2] ? `${r.Apelido || r[2]}, ${r.Nome || r[3]}` : (r.Nome || r[3])}
+                              </td>
+                              <td className="p-2.5 font-mono">{r.Nacionalidade || r[5]}</td>
+                              <td className="p-2.5 font-mono">{r.Tipo_Documento || r[7]}: {r.Numero_Documento || r[8]}</td>
+                              <td className="p-2.5 font-mono text-slate-200">{formatarDataIso(r.Check_In || r[12])}</td>
+                              <td className="p-2.5 font-mono text-amber-300 font-semibold">{formatarDataIso(r.Check_Out || r[13])}</td>
+                              <td className="p-2.5">{r.Numero_Reserva || r[23] || 'sem reserva'} <span className="text-slate-500">({r.Plataforma_Reserva || r[24] || '-'})</span></td>
+                              <td className="p-2.5 font-bold text-emerald-400">{formatarMoeda(r.Valor_Reserva || r[19])}</td>
+                              <td className="p-2.5 font-bold text-emerald-300">{formatarMoeda(r.Taxa_Turistica || r[20])}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               )}
             </section>
