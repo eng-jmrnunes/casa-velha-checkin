@@ -275,9 +275,6 @@
       const [searchQuery, setSearchQuery] = useState('');
       const [searchResults, setSearchResults] = useState([]);
       const [searching, setSearching] = useState(false);
-      const [editingRegisto, setEditingRegisto] = useState(null);
-      const [novaDataSaida, setNovaDataSaida] = useState('');
-      const [updating, setUpdating] = useState(false);
 
       const [idadeCalculada, setIdadeCalculada] = useState(null);
       const [ultimoSucesso, setUltimoSucesso] = useState(null);
@@ -620,7 +617,6 @@
           ? `[${selectedFuncObj.id}] ${selectedFuncObj.nome}` 
           : selectedFuncObj.nome;
 
-        // Formatação APELIDO, NOME para o comprovativo
         const nomeFormatadoComprovativo = novoBoletim.nome.trim() 
           ? `${novoBoletim.apelido.trim()}, ${novoBoletim.nome.trim()}` 
           : novoBoletim.apelido.trim();
@@ -687,7 +683,6 @@
         if (!searchQuery.trim()) return;
 
         setSearching(true);
-        setEditingRegisto(null);
 
         try {
           const response = await fetch(GOOGLE_SCRIPT_URL, {
@@ -712,39 +707,43 @@
         }
       };
 
-      const handleUpdateCheckout = async () => {
-        if (!novaDataSaida || novaDataSaida <= editingRegisto.dataEntrada) {
-          alert('A nova data de saída deve ser posterior à data de check-in.');
-          return;
-        }
+      // NOVO CHECK-IN: Preenche o formulário com os dados do hóspede pesquisado
+      const handlePreencherNovoCheckIn = (hospede) => {
+        setNovoBoletim(prev => ({
+          ...prev,
+          apelido: hospede.apelido || prev.apelido,
+          nome: hospede.nome || prev.nome,
+          nacionalidade: hospede.nacionalidade || prev.nacionalidade,
+          localNascimento: hospede.localNascimento || prev.localNascimento,
+          docTipo: hospede.docTipo || prev.docTipo,
+          docNumero: hospede.docNumero || prev.docNumero,
+          docPais: hospede.docPais || prev.docPais,
+          paisResidencia: hospede.paisResidencia || prev.paisResidencia,
+          localResidencia: hospede.localResidencia || prev.localResidencia,
+          tipoAlojamento: hospede.tipoAlojamento || prev.tipoAlojamento,
+          numeroUnidade: hospede.numeroUnidade || prev.numeroUnidade,
+          dataEntrada: todayStr, // Data de hoje
+          dataSaida: '',         // Em branco
+          valorReserva: '',
+          taxaTuristica: '0.00',
+          numeroReserva: '',
+          plataformaReserva: 'sem reserva'
+        }));
 
-        setUpdating(true);
-
-        try {
-          const response = await fetch(GOOGLE_SCRIPT_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({
-              action: "UPDATE_CHECKOUT",
-              rowIndex: editingRegisto.rowIndex,
-              newCheckout: novaDataSaida
-            })
-          });
-          const result = await response.json();
-
-          if (result.status === "success") {
-            alert(`✅ Data de Check-out atualizada com sucesso para ${novaDataSaida}!`);
-            setEditingRegisto(null);
-            setSearchResults([]);
-            setSearchQuery('');
-          } else {
-            alert('Erro ao atualizar: ' + result.message);
+        if (hospede.dataNascimento) {
+          const parts = hospede.dataNascimento.split('-');
+          if (parts.length === 3) {
+            setNasceAno(parts[0]);
+            setNasceMes(parts[1]);
+            setNasceDia(parts[2]);
+            setNovoBoletim(prev => ({ ...prev, dataNascimento: hospede.dataNascimento }));
           }
-        } catch (error) {
-          alert('Erro ao ligar ao servidor.');
-        } finally {
-          setUpdating(false);
         }
+
+        setShowBoletimForm(true);
+
+        // Deslocar suavemente até ao formulário
+        window.scrollTo({ top: 350, behavior: 'smooth' });
       };
 
       const handlePrintFromSearch = (itemMapeado) => {
@@ -817,9 +816,9 @@
 
           <main className="max-w-4xl mx-auto p-4 mt-4 space-y-6">
 
-            {/* PAINEL 1: PESQUISAR E ALTERAR CHECK-OUT PREVISTO */}
+            {/* PAINEL 1: PESQUISAR HÓSPEDE (2ª VIA & NOVO CHECK-IN) */}
             <div className="bg-blue-50 p-5 rounded-xl border border-blue-200 shadow-sm space-y-3">
-              <h2 className="text-sm font-bold text-blue-900">🔍 Pesquisar Hóspede, Alterar Check-out, 2ª Via</h2>
+              <h2 className="text-sm font-bold text-blue-900">🔍 Pesquisar Hóspede (2ª Via do Comprovativo ou Novo Check-in)</h2>
               <form onSubmit={handleSearch} className="flex gap-2 text-xs">
                 <input 
                   type="text" 
@@ -845,7 +844,7 @@
                       <div>
                         <div className="font-bold text-slate-900">{r.nomeCompleto} <span className="text-blue-600 font-mono">({r.idBoletim})</span></div>
                         <div className="text-slate-500">{r.docTipo}: {r.docNumero} | {r.tipoAlojamento} (Unidade {r.numeroUnidade}) | Reserva: <strong>{r.numeroReserva || 'sem reserva'}</strong> ({r.plataformaReserva})</div>
-                        <div className="text-slate-700 font-medium">Entrada: {r.dataEntrada} → Saída Atual: <span className="text-amber-700 font-bold">{r.dataSaida}</span></div>
+                        <div className="text-slate-700 font-medium">Última Entrada: {r.dataEntrada} → Saída: <span className="text-slate-900 font-bold">{r.dataSaida}</span></div>
                       </div>
                       <div className="flex gap-2 self-end sm:self-auto">
                         <button 
@@ -855,50 +854,19 @@
                           🖨️ 2ª Via
                         </button>
                         <button 
-                          onClick={() => { setEditingRegisto(r); setNovaDataSaida(r.dataSaida); }} 
-                          className="bg-amber-600 hover:bg-amber-700 text-white font-semibold px-3 py-1.5 rounded"
+                          onClick={() => handlePreencherNovoCheckIn(r)} 
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded shadow transition flex items-center gap-1"
                         >
-                          Alterar Check-out
+                          ✨ Novo Check-in
                         </button>
                       </div>
                     </div>
                   ))}
                 </div>
               )}
-
-              {editingRegisto && (
-                <div className="mt-3 p-4 bg-amber-100 rounded border border-amber-300 text-xs space-y-2">
-                  <div className="font-bold text-amber-900">Alterar Saída Prevista para: {editingRegisto.nomeCompleto}</div>
-                  <div className="flex items-center gap-3">
-                    <div>
-                      <label className="block font-semibold text-amber-900 mb-1">Nova Data de Check-out Prevista:</label>
-                      <input 
-                        type="date" 
-                        value={novaDataSaida} 
-                        onChange={e => setNovaDataSaida(e.target.value)} 
-                        className="border border-amber-400 p-2 rounded bg-white font-bold" 
-                        required 
-                      />
-                    </div>
-                    <button 
-                      onClick={handleUpdateCheckout} 
-                      disabled={updating}
-                      className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-4 py-2 rounded self-end disabled:bg-slate-400"
-                    >
-                      {updating ? 'A Guardar...' : '💾 Confirmar Nova Data'}
-                    </button>
-                    <button 
-                      onClick={() => setEditingRegisto(null)} 
-                      className="text-slate-600 hover:underline self-end py-2"
-                    >
-                      Cancelar
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
 
-            {/* PAINEL 2: NOVO FORMULÁRIO DE CHECK-IN */}
+            {/* PAINEL 2: FORMULÁRIO DE CHECK-IN */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <div 
                 onClick={() => setShowBoletimForm(!showBoletimForm)}
