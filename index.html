@@ -261,7 +261,6 @@
       { num: '10', nome: 'Outubro' }, { num: '11', nome: 'Novembro' }, { num: '12', nome: 'Dezembro' }
     ];
 
-    // FUNÇÃO RIGOROSA: CONVERTE PARA MAIÚSCULAS E REMOVE TODOS OS ACENTOS / DIACRÍTICOS (REQUISITO AIMA)
     const sanitizarTextoAIMA = (txt) => {
       if (!txt) return '';
       return String(txt)
@@ -294,7 +293,7 @@
       const [showInHousePanel, setShowInHousePanel] = useState(false);
       const [loadingInHouse, setLoadingInHouse] = useState(false);
 
-      // ESTADO OPÇÃO B: Estado Específico da Unidade Selecionada
+      // ESTADO OPÇÃO B: Estado e Gestão de Lotação da Unidade Selecionada
       const [estadoUnidade, setEstadoUnidade] = useState(null);
 
       const [funcionarios, setFuncionarios] = useState([]);
@@ -319,8 +318,8 @@
         localResidencia: '',
         dataEntrada: todayStr,
         dataSaida: '',
-        tipoAlojamento: 'Quarto Duplo com Vista Mar',
-        numeroUnidade: '1',
+        tipoAlojamento: '',
+        numeroUnidade: '',
         eMenor: 'Não',
         titularDoc: 'Próprio',
         qualidadeAcompanhante: 'N/A',
@@ -371,7 +370,7 @@
       const taxaTuristicaNum = parseFloat(novoBoletim.taxaTuristica || 0) || 0;
       const totalPagarInformativo = (valorReservaNum + taxaTuristicaNum).toFixed(2);
 
-      // CARREGAR HÓSPEDES IN-HOUSE PARA O BLOCO DO TOPO (OPÇÃO A) - CORRIGIDO
+      // CARREGAR HÓSPEDES IN-HOUSE E UNIDADES ÚNICAS
       const carregarInHouseHoje = async () => {
         setLoadingInHouse(true);
         try {
@@ -405,13 +404,15 @@
         carregarInHouseHoje();
       }, []);
 
-      // VERIFICAÇÃO DINÂMICA DA UNIDADE SELECIONADA (OPÇÃO B) - CONDICIONADA À DATA DE SAÍDA
+      // CÁLCULO DE UNIDADES ÚNICAS OCUPADAS HOJE
+      const unidadesUnicasInHouse = [...new Set(inHouseList.map(h => h.numeroUnidade))].filter(Boolean);
+
+      // VERIFICAÇÃO DINÂMICA DA UNIDADE E LOTAÇÃO MÁXIMA (4 OCUPANTES)
       useEffect(() => {
         const uTarget = (novoBoletim.numeroUnidade || '').trim();
         const dInTarget = novoBoletim.dataEntrada;
         const dOutTarget = novoBoletim.dataSaida;
 
-        // Só valida se tiver unidade e AMBAS as datas preenchidas
         if (!uTarget || !dInTarget || !dOutTarget) {
           setEstadoUnidade(null);
           return;
@@ -430,7 +431,7 @@
               const startTarget = new Date(dInTarget);
               const endTarget = new Date(dOutTarget);
 
-              const conflito = result.data.find(r => {
+              const conflitos = result.data.filter(r => {
                 const uExist = String(r.Numero_Unidade || r[15] || '').trim();
                 const dInExistStr = formatarDataLimpa(r.Check_In || r[12]);
                 const dOutExistStr = formatarDataLimpa(r.Check_Out || r[13]);
@@ -443,18 +444,32 @@
                 return false;
               });
 
-              if (conflito) {
-                const norm = processarLinhaPorIndice(conflito);
+              const count = conflitos.length;
+
+              if (count === 0) {
+                // UNIDADE LIVRE -> HÓSPEDE TITULAR
                 setEstadoUnidade({
-                  ocupado: true,
+                  tipo: 'livre',
                   unidade: uTarget,
-                  hospede: norm.nomeCompleto,
-                  saida: norm.dataSaida
+                  count: 0
                 });
-              } else {
+              } else if (count < 4) {
+                // UNIDADE COM VAGAS -> HÓSPEDE ACOMPANHANTE (VALOR RESERVA FIXADO A 0.00)
+                const primeiroRegisto = processarLinhaPorIndice(conflitos[0]);
                 setEstadoUnidade({
-                  ocupado: false,
-                  unidade: uTarget
+                  tipo: 'acompanhante',
+                  unidade: uTarget,
+                  count: count,
+                  titular: primeiroRegisto.nomeCompleto,
+                  saida: primeiroRegisto.dataSaida
+                });
+                setNovoBoletim(prev => ({ ...prev, valorReserva: '0.00' }));
+              } else {
+                // LOTAÇÃO MÁXIMA ATINGIDA (4/4)
+                setEstadoUnidade({
+                  tipo: 'lotado',
+                  unidade: uTarget,
+                  count: count
                 });
               }
             }
@@ -529,8 +544,8 @@
         const localResidencia = sanitizarTextoAIMA(arr[11] || '');
         const dataEntrada = formatarDataLimpa(arr[12]);
         const dataSaida = formatarDataLimpa(arr[13]);
-        const tipoAlojamento = String(arr[14] || 'Quarto Duplo com Vista Mar').trim();
-        const numeroUnidade = String(arr[15] || '1').trim();
+        const tipoAlojamento = String(arr[14] || '').trim();
+        const numeroUnidade = String(arr[15] || '').trim();
         const eMenor = String(arr[16] || 'Não').trim();
         const titularDoc = String(arr[17] || 'Próprio').trim();
         const qualidadeAcompanhante = String(arr[18] || 'N/A').trim();
@@ -708,6 +723,16 @@
       const handleSubmit = async (e) => {
         e.preventDefault();
 
+        if (!novoBoletim.tipoAlojamento.trim()) {
+          alert('Por favor selecione o Tipo de Alojamento.');
+          return;
+        }
+
+        if (!novoBoletim.numeroUnidade.trim()) {
+          alert('Por favor introduza o número da Unidade.');
+          return;
+        }
+
         if (!novoBoletim.apelido.trim()) {
           alert('Por favor introduza o Apelido do hóspede.');
           return;
@@ -723,9 +748,9 @@
           return;
         }
 
-        if (estadoUnidade && estadoUnidade.ocupado) {
-          const confirma = window.confirm(`⚠️ AVISO DE OCUPAÇÃO:\nA Unidade ${estadoUnidade.unidade} já tem uma reserva atribuída a ${estadoUnidade.hospede} (Saída prevista em ${estadoUnidade.saida}).\n\nDeseja mesmo assim prosseguir com este check-in?`);
-          if (!confirma) return;
+        if (estadoUnidade && estadoUnidade.tipo === 'lotado') {
+          alert(`⛔ LOTAÇÃO MÁXIMA ATINGIDA:\nA Unidade ${estadoUnidade.unidade} já atingiu o limite máximo de 4 ocupantes para este período.`);
+          return;
         }
 
         setLoading(true);
@@ -779,8 +804,8 @@
             localResidencia: '',
             dataEntrada: todayStr,
             dataSaida: '',
-            tipoAlojamento: novoBoletim.tipoAlojamento,
-            numeroUnidade: novoBoletim.numeroUnidade,
+            tipoAlojamento: '',
+            numeroUnidade: '',
             eMenor: 'Não',
             titularDoc: 'Próprio',
             qualidadeAcompanhante: 'N/A',
@@ -984,7 +1009,7 @@
               )}
             </div>
 
-            {/* OPÇÃO A: PAINEL EXPANSÍVEL DE UNIDADES OCUPADAS HOJE (IN-HOUSE) */}
+            {/* OPÇÃO A: PAINEL EXPANSÍVEL DE UNIDADES OCUPADAS HOJE (IN-HOUSE - BASEADO EM UNIDADES ÚNICAS) */}
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl shadow-sm overflow-hidden text-xs">
               <div 
                 onClick={() => setShowInHousePanel(!showInHousePanel)}
@@ -993,7 +1018,8 @@
                 <div className="flex items-center gap-2">
                   <span className="text-base">🟢</span>
                   <span className="font-bold text-emerald-900">
-                    Unidades Ocupadas Hoje (In-House): <strong className="text-emerald-950 font-mono text-sm">{inHouseList.length}</strong>
+                    Unidades Ocupadas Hoje (In-House): <strong className="text-emerald-950 font-mono text-sm">{unidadesUnicasInHouse.length}</strong>
+                    <span className="text-slate-600 font-normal ml-1">({inHouseList.length} hóspedes no total)</span>
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1076,11 +1102,92 @@
 
                   <form onSubmit={handleSubmit} className="space-y-4 text-sm">
                     
-                    {/* 1. Documento de Identificação */}
+                    {/* 3. Dados da Reserva (Movido para cima para validação imediata de Unidade/Datas) */}
+                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
+                      <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">1. Dados da Reserva e Unidade</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Tipo de Alojamento *</label>
+                          <select 
+                            value={novoBoletim.tipoAlojamento} 
+                            onChange={e => setNovoBoletim({...novoBoletim, tipoAlojamento: e.target.value})} 
+                            className="w-full border border-slate-300 p-2 rounded bg-white text-xs"
+                            required
+                          >
+                            <option value="">Selecione...</option>
+                            {TIPOS_ALOJAMENTO.map(t => <option key={t} value={t}>{t}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Unidade *</label>
+                          <input 
+                            type="text" 
+                            placeholder="Ex: 1"
+                            value={novoBoletim.numeroUnidade} 
+                            onChange={e => setNovoBoletim({...novoBoletim, numeroUnidade: e.target.value})} 
+                            className="w-full border border-slate-300 p-2 rounded text-xs font-bold" 
+                            required 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">N.º Reserva</label>
+                          <input 
+                            type="text" 
+                            placeholder="Opcional" 
+                            value={novoBoletim.numeroReserva} 
+                            onChange={e => handleNumeroReservaChange(e.target.value)} 
+                            className="w-full border border-slate-300 p-2 rounded text-xs" 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Plataforma *</label>
+                          <select 
+                            value={novoBoletim.plataformaReserva} 
+                            onChange={e => setNovoBoletim({...novoBoletim, plataformaReserva: e.target.value})} 
+                            disabled={!novoBoletim.numeroReserva.trim()}
+                            className="w-full border border-slate-300 p-2 rounded bg-white text-xs disabled:bg-slate-100"
+                          >
+                            {PLATAFORMAS_RESERVA.map(p => <option key={p} value={p}>{p}</option>)}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* INDICADOR DINÂMICO DE ESTADO / TITULAR / ACOMPANHANTE / LOTADO */}
+                      {estadoUnidade && (
+                        <div className={`p-3 rounded-lg text-xs font-semibold flex items-center gap-2 transition ${
+                          estadoUnidade.tipo === 'lotado' 
+                            ? 'bg-rose-100 border border-rose-300 text-rose-900' 
+                            : estadoUnidade.tipo === 'acompanhante'
+                            ? 'bg-blue-100 border border-blue-300 text-blue-900'
+                            : 'bg-emerald-100 border border-emerald-300 text-emerald-900'
+                        }`}>
+                          <span className="text-base">
+                            {estadoUnidade.tipo === 'lotado' ? '⛔' : estadoUnidade.tipo === 'acompanhante' ? 'ℹ️' : '🟢'}
+                          </span>
+                          <div>
+                            {estadoUnidade.tipo === 'lotado' ? (
+                              <span>
+                                <strong>Lotação Máxima Atingida (4/4):</strong> A Unidade {estadoUnidade.unidade} já tem 4 ocupantes registados para estas datas.
+                              </span>
+                            ) : estadoUnidade.tipo === 'acompanhante' ? (
+                              <span>
+                                <strong>Modo Acompanhante ({estadoUnidade.count}/4):</strong> Unidade {estadoUnidade.unidade} já tem como Titular <strong>{estadoUnidade.titular}</strong> (Saída: {estadoUnidade.saida}). O valor da reserva foi fixado automaticamente a <strong>0.00 €</strong>.
+                              </span>
+                            ) : (
+                              <span>
+                                <strong>Unidade {estadoUnidade.unidade} Disponível:</strong> Este será registado como o <strong>Hóspede Titular</strong> (com valor de reserva).
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 2. Documento de Identificação */}
                     <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
                       <div className="flex justify-between items-center">
                         <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">
-                          1. Documento de Identificação
+                          2. Documento de Identificação
                         </h3>
                         {verificandoDoc && (
                           <span className="text-[11px] text-blue-600 font-semibold animate-pulse">
@@ -1127,9 +1234,9 @@
                       </div>
                     </div>
 
-                    {/* 2. Nomes e Identificação Pessoal */}
+                    {/* 3. Nomes e Identificação Pessoal */}
                     <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
-                      <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">2. Nomes e Identificação Pessoal</h3>
+                      <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">3. Nomes e Identificação Pessoal</h3>
                       
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
@@ -1245,76 +1352,6 @@
                       </div>
                     </div>
 
-                    {/* 3. Dados da Reserva */}
-                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
-                      <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">3. Dados da Reserva</h3>
-                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">Tipo de Alojamento *</label>
-                          <select 
-                            value={novoBoletim.tipoAlojamento} 
-                            onChange={e => setNovoBoletim({...novoBoletim, tipoAlojamento: e.target.value})} 
-                            className="w-full border border-slate-300 p-2 rounded bg-white text-xs"
-                          >
-                            {TIPOS_ALOJAMENTO.map(t => <option key={t} value={t}>{t}</option>)}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">Unidade *</label>
-                          <input 
-                            type="text" 
-                            value={novoBoletim.numeroUnidade} 
-                            onChange={e => setNovoBoletim({...novoBoletim, numeroUnidade: e.target.value})} 
-                            className="w-full border border-slate-300 p-2 rounded text-xs font-bold" 
-                            required 
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">N.º Reserva</label>
-                          <input 
-                            type="text" 
-                            placeholder="Opcional" 
-                            value={novoBoletim.numeroReserva} 
-                            onChange={e => handleNumeroReservaChange(e.target.value)} 
-                            className="w-full border border-slate-300 p-2 rounded text-xs" 
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">Plataforma *</label>
-                          <select 
-                            value={novoBoletim.plataformaReserva} 
-                            onChange={e => setNovoBoletim({...novoBoletim, plataformaReserva: e.target.value})} 
-                            disabled={!novoBoletim.numeroReserva.trim()}
-                            className="w-full border border-slate-300 p-2 rounded bg-white text-xs disabled:bg-slate-100"
-                          >
-                            {PLATAFORMAS_RESERVA.map(p => <option key={p} value={p}>{p}</option>)}
-                          </select>
-                        </div>
-                      </div>
-
-                      {/* OPÇÃO B: INDICADOR DINÂMICO DE ESTADO DA UNIDADE (EM DESTAQUE VERMELHO QUANDO OCUPADA) */}
-                      {estadoUnidade && (
-                        <div className={`p-3 rounded-lg text-xs font-semibold flex items-center gap-2 transition ${
-                          estadoUnidade.ocupado 
-                            ? 'bg-rose-100 border border-rose-300 text-rose-900' 
-                            : 'bg-emerald-100 border border-emerald-300 text-emerald-900'
-                        }`}>
-                          <span className="text-base">{estadoUnidade.ocupado ? '🔴' : '🟢'}</span>
-                          <div>
-                            {estadoUnidade.ocupado ? (
-                              <span>
-                                <strong>Unidade {estadoUnidade.unidade} Ocupada por:</strong> {estadoUnidade.hospede} (Check-out previsto: {estadoUnidade.saida})
-                              </span>
-                            ) : (
-                              <span>
-                                <strong>Unidade {estadoUnidade.unidade}:</strong> Disponível para as datas selecionadas.
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
                     {/* PAINEL DE MENOR DE IDADE */}
                     {novoBoletim.eMenor === 'Sim' && (
                       <div className="bg-purple-50 p-4 rounded-lg border border-purple-200 space-y-3">
@@ -1385,14 +1422,17 @@
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
                         <div>
-                          <label className="block text-xs font-semibold text-emerald-800 mb-1">Valor Reserva (€)</label>
+                          <label className="block text-xs font-semibold text-emerald-800 mb-1">
+                            Valor Reserva (€) {estadoUnidade?.tipo === 'acompanhante' && <span className="text-[10px] text-blue-600 font-normal">(Acompanhante: 0.00 €)</span>}
+                          </label>
                           <input 
                             type="number" 
                             step="0.01" 
                             placeholder="0.00"
                             value={novoBoletim.valorReserva} 
                             onChange={e => setNovoBoletim({...novoBoletim, valorReserva: e.target.value})} 
-                            className="w-full border border-emerald-300 p-2 rounded bg-emerald-50/50 font-bold text-xs" 
+                            disabled={estadoUnidade?.tipo === 'acompanhante'}
+                            className="w-full border border-emerald-300 p-2 rounded bg-emerald-50/50 font-bold text-xs disabled:bg-slate-100 disabled:text-slate-500" 
                           />
                         </div>
 
@@ -1434,10 +1474,10 @@
 
                     <button 
                       type="submit" 
-                      disabled={loading}
+                      disabled={loading || estadoUnidade?.tipo === 'lotado'}
                       className="w-full bg-blue-700 text-white font-bold py-3.5 rounded-lg hover:bg-blue-800 transition shadow text-base disabled:bg-slate-400"
                     >
-                      {loading ? 'A Guardar...' : '💾 Confirmar Check-in'}
+                      {loading ? 'A Guardar...' : estadoUnidade?.tipo === 'lotado' ? '⛔ Unidade Lotada (Impossível Registar)' : '💾 Confirmar Check-in'}
                     </button>
                   </form>
                 </div>
