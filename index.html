@@ -3,1335 +3,944 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Casa Velha - Terminal de Check-in</title>
+  <title>Casa Velha - Gestão & AIMA</title>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    @media print {
-      body * { visibility: hidden; }
-      #printable-boletim, #printable-boletim * { visibility: visible; }
-      #printable-boletim { position: absolute; left: 0; top: 0; width: 100%; }
+    input[type="date"]::-webkit-calendar-picker-indicator {
+      cursor: pointer;
+      filter: invert(0.8);
     }
   </style>
 </head>
-<body class="bg-slate-100 text-slate-800">
+<body class="bg-slate-900 text-slate-100 min-h-screen">
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect } = React;
+    const { useState, useEffect, useRef } = React;
 
     const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzZitsCHoHUdgDwb2g8OrJEUm6tkXob-XhiywGuRt2ZAIPH9pwTWVvXGc2hQzA4psfbTg/exec";
 
-    const TIPOS_ALOJAMENTO = [
-      "Quarto Duplo com Vista Mar",
-      "Quarto Triplo",
-      "Estúdio",
-      "Apartamento Dúplex"
-    ];
-
-    const MODOS_PAGAMENTO = [
-      "Numerário",
-      "Booking",
-      "MB",
-      "Outro"
-    ];
-
-    const PLATAFORMAS_RESERVA = [
-      "sem reserva",
-      "Booking",
-      "AirBnb",
-      "Site Próprio",
-      "Outro"
-    ];
-
-    // Tabela de Países ICAO ordenada alfabeticamente com Portugal em primeiro
-    const PAISES_ICAO = [
-      { nome: "Portugal", code: "PRT" },
-      { nome: "Afeganistão", code: "AFG" },
-      { nome: "Albânia", code: "ALB" },
-      { nome: "Alemanha", code: "D  " },
-      { nome: "Andorra", code: "AND" },
-      { nome: "Angola", code: "AGO" },
-      { nome: "Antígua e Barbuda", code: "ATG" },
-      { nome: "Arábia Saudita", code: "SAU" },
-      { nome: "Argélia", code: "DZA" },
-      { nome: "Argentina", code: "ARG" },
-      { nome: "Arménia", code: "ARM" },
-      { nome: "África do Sul", code: "ZAF" },
-      { nome: "Austrália", code: "AUS" },
-      { nome: "Áustria", code: "AUT" },
-      { nome: "Bahamas", code: "BHS" },
-      { nome: "Bangladesh", code: "BGD" },
-      { nome: "Barbados", code: "BRB" },
-      { nome: "Barém", code: "BHR" },
-      { nome: "Bélgica", code: "BEL" },
-      { nome: "Belize", code: "BLZ" },
-      { nome: "Benim", code: "BEN" },
-      { nome: "Bermudas", code: "BMU" },
-      { nome: "Bielorrússia, República", code: "BLR" },
-      { nome: "Bolívia", code: "BOL" },
-      { nome: "Bósnia Herzegovina", code: "BIH" },
-      { nome: "Botswana", code: "BWA" },
-      { nome: "Brasil", code: "BRA" },
-      { nome: "Brunei Darussalam", code: "BRN" },
-      { nome: "Bulgaria", code: "BGR" },
-      { nome: "Burkina Faso", code: "BFA" },
-      { nome: "Burundi", code: "BDI" },
-      { nome: "Butão", code: "BTN" },
-      { nome: "Cabo Verde", code: "CPV" },
-      { nome: "Camboja", code: "KHM" },
-      { nome: "Camarões", code: "CMR" },
-      { nome: "Canadá", code: "CAN" },
-      { nome: "Catar", code: "QAT" },
-      { nome: "Cazaquistão, República do", code: "KAZ" },
-      { nome: "Chade", code: "TCD" },
-      { nome: "Chile", code: "CHL" },
-      { nome: "China", code: "CHN" },
-      { nome: "Chipre", code: "CYP" },
-      { nome: "Colômbia", code: "COL" },
-      { nome: "Comores, União das", code: "COM" },
-      { nome: "Congo", code: "COG" },
-      { nome: "Coreia", code: "PRK" },
-      { nome: "Coreia, República da", code: "KOR" },
-      { nome: "Costa Rica", code: "CRI" },
-      { nome: "Costa do Marfim", code: "CIV" },
-      { nome: "Croácia", code: "HRV" },
-      { nome: "Cuba", code: "CUB" },
-      { nome: "Dinamarca", code: "DNK" },
-      { nome: "Dominica", code: "DMA" },
-      { nome: "Egipto", code: "EGY" },
-      { nome: "El Salvador", code: "SLV" },
-      { nome: "Emiratos Árabes Unidos", code: "ARE" },
-      { nome: "Equador", code: "ECU" },
-      { nome: "Eritreia", code: "ERI" },
-      { nome: "Eslováquia, República Eslovaca", code: "SVK" },
-      { nome: "Eslovénia", code: "SVN" },
-      { nome: "Espanha", code: "ESP" },
-      { nome: "Estados Unidos da América", code: "USA" },
-      { nome: "Estónia", code: "EST" },
-      { nome: "Etiópia", code: "ETH" },
-      { nome: "Filipinas", code: "PHL" },
-      { nome: "Finlândia", code: "FIN" },
-      { nome: "França", code: "FRA" },
-      { nome: "Gabão", code: "GAB" },
-      { nome: "Gâmbia", code: "GMB" },
-      { nome: "Gana", code: "GHA" },
-      { nome: "Geórgia", code: "GEO" },
-      { nome: "Granada", code: "GRD" },
-      { nome: "Grécia", code: "GRC" },
-      { nome: "Guam", code: "GUM" },
-      { nome: "Guatemala", code: "GTM" },
-      { nome: "Guiana", code: "GUY" },
-      { nome: "Guiné Conacri", code: "GIN" },
-      { nome: "Guiné Equatorial", code: "GNQ" },
-      { nome: "Guiné-Bissau", code: "GNB" },
-      { nome: "Haiti", code: "HTI" },
-      { nome: "Honduras", code: "HND" },
-      { nome: "Hong-Kong", code: "HKG" },
-      { nome: "Hungria", code: "HUN" },
-      { nome: "Iémen, Republica Árabe do", code: "YEM" },
-      { nome: "Índia", code: "IND" },
-      { nome: "Indonésia", code: "IDN" },
-      { nome: "Irão, República Islâmica", code: "IRN" },
-      { nome: "Iraque", code: "IRQ" },
-      { nome: "Irlanda", code: "IRL" },
-      { nome: "Islândia", code: "ISL" },
-      { nome: "Israel", code: "ISR" },
-      { nome: "Itália", code: "ITA" },
-      { nome: "Jamaica", code: "JAM" },
-      { nome: "Japão", code: "JPN" },
-      { nome: "Jibuti", code: "DJI" },
-      { nome: "Jordânia", code: "JOR" },
-      { nome: "Kiribati", code: "KIR" },
-      { nome: "Kosovo, República do", code: "RKS" },
-      { nome: "Kuwait", code: "KWT" },
-      { nome: "Laos, República Popular Democrática", code: "LAO" },
-      { nome: "Lesoto", code: "LSO" },
-      { nome: "Letónia", code: "LVA" },
-      { nome: "Libéria", code: "LBR" },
-      { nome: "Líbano", code: "LBN" },
-      { nome: "Líbia", code: "LBY" },
-      { nome: "Liechtenstein", code: "LIE" },
-      { nome: "Lituânia", code: "LTU" },
-      { nome: "Luxemburgo", code: "LUX" },
-      { nome: "Macau", code: "MAC" },
-      { nome: "Macedónia do Norte, República da", code: "MKD" },
-      { nome: "Madagáscar", code: "MDG" },
-      { nome: "Malawi", code: "MWI" },
-      { nome: "Malásia", code: "MYS" },
-      { nome: "Maldivas", code: "MDV" },
-      { nome: "Mali", code: "MLI" },
-      { nome: "Malta", code: "MLT" },
-      { nome: "Marrocos", code: "MAR" },
-      { nome: "Mauritânia", code: "MRT" },
-      { nome: "Mayotte", code: "MYT" },
-      { nome: "México", code: "MEX" },
-      { nome: "Micronésia, Estados Federados da", code: "FSM" },
-      { nome: "Moçambique", code: "MOZ" },
-      { nome: "Moldávia, República", code: "MDA" },
-      { nome: "Mónaco", code: "MCO" },
-      { nome: "Mongólia", code: "MNG" },
-      { nome: "Monserrate", code: "MSR" },
-      { nome: "Montenegro, República de", code: "MNE" },
-      { nome: "Myanmar (Birmânia)", code: "MMR" },
-      { nome: "Namíbia", code: "NAM" },
-      { nome: "Nauru", code: "NRU" },
-      { nome: "Nepal", code: "NPL" },
-      { nome: "Nicarágua", code: "NIC" },
-      { nome: "Níger", code: "NER" },
-      { nome: "Nigéria", code: "NGA" },
-      { nome: "Niue", code: "NIU" },
-      { nome: "Noruega", code: "NOR" },
-      { nome: "Nova Caledónia", code: "NCL" },
-      { nome: "Nova Zelândia", code: "NZL" },
-      { nome: "Oman", code: "OMN" },
-      { nome: "Países Baixos", code: "NLD" },
-      { nome: "Palau", code: "PLW" },
-      { nome: "Palestina", code: "PSE" },
-      { nome: "Panamá", code: "PAN" },
-      { nome: "Papuásia Nova Guiné", code: "PNG" },
-      { nome: "Paquistão", code: "PAK" },
-      { nome: "Paraguai", code: "PRY" },
-      { nome: "Peru", code: "PER" },
-      { nome: "Polónia", code: "POL" },
-      { nome: "Porto Rico", code: "PRI" },
-      { nome: "Quénia", code: "KEN" },
-      { nome: "Quirguizistão", code: "KGZ" },
-      { nome: "Reino Unido", code: "GBR" },
-      { nome: "Rep. Democ. Congo (Zaire)", code: "COD" },
-      { nome: "República Centro Africana", code: "CAF" },
-      { nome: "República Checa", code: "CZE" },
-      { nome: "República Dominicana", code: "DOM" },
-      { nome: "Reunião", code: "REU" },
-      { nome: "Roménia", code: "ROU" },
-      { nome: "Ruanda", code: "RWA" },
-      { nome: "Rússia, Federação", code: "RUS" },
-      { nome: "Samoa", code: "WSM" },
-      { nome: "Santa Lúcia", code: "LCA" },
-      { nome: "Santa Sé (Cidade Estado do Vaticano)", code: "VAT" },
-      { nome: "São Cristóvão e Nevis", code: "KNA" },
-      { nome: "São Marino", code: "SMR" },
-      { nome: "São Tomé e Príncipe", code: "STP" },
-      { nome: "São Vicente e Grenadinas", code: "VCT" },
-      { nome: "Senegal", code: "SEN" },
-      { nome: "Sérvia, República da", code: "SRB" },
-      { nome: "Serra Leoa", code: "SLE" },
-      { nome: "Seychelles", code: "SYC" },
-      { nome: "Singapura", code: "SGP" },
-      { nome: "Síria, República Árabe da", code: "SYR" },
-      { nome: "Somália", code: "SOM" },
-      { nome: "Sri Lanka", code: "LKA" },
-      { nome: "Sudão", code: "SDN" },
-      { nome: "Sudão do Sul, República do", code: "SSD" },
-      { nome: "Suazilândia", code: "SWZ" },
-      { nome: "Suécia", code: "SWE" },
-      { nome: "Suíça", code: "CHE" },
-      { nome: "Suriname", code: "SUR" },
-      { nome: "Tailândia", code: "THA" },
-      { nome: "Taiwan", code: "TWN" },
-      { nome: "Tajiquistão", code: "TJK" },
-      { nome: "Tanzânia, República da", code: "TZA" },
-      { nome: "Timor-Leste", code: "TLS" },
-      { nome: "Togo", code: "TGO" },
-      { nome: "Tonga", code: "TON" },
-      { nome: "Trindade e Tobago", code: "TTO" },
-      { nome: "Tunísia", code: "TUN" },
-      { nome: "Turquia", code: "TUR" },
-      { nome: "Turquemenistão", code: "TKM" },
-      { nome: "Tuvalu", code: "TUV" },
-      { nome: "Ucrânia, República", code: "UKR" },
-      { nome: "Uganda", code: "UGA" },
-      { nome: "Uruguai", code: "URY" },
-      { nome: "Usbequistão", code: "UZB" },
-      { nome: "Vanuatu", code: "VUT" },
-      { nome: "Venezuela", code: "VEN" },
-      { nome: "Vietname", code: "VNM" },
-      { nome: "Zâmbia", code: "ZMB" },
-      { nome: "Zimbabwe", code: "ZWE" }
-    ];
-
-    const ANO_ATUAL = new Date().getFullYear();
-    const ANOS_LISTA = Array.from({ length: ANO_ATUAL - 1920 + 1 }, (_, i) => ANO_ATUAL - i);
-    const MESES_LISTA = [
-      { num: '01', nome: 'Janeiro' }, { num: '02', nome: 'Fevereiro' }, { num: '03', nome: 'Março' },
-      { num: '04', nome: 'Abril' }, { num: '05', nome: 'Maio' }, { num: '06', nome: 'Junho' },
-      { num: '07', nome: 'Julho' }, { num: '08', nome: 'Agosto' }, { num: '09', nome: 'Setembro' },
-      { num: '10', nome: 'Outubro' }, { num: '11', nome: 'Novembro' }, { num: '12', nome: 'Dezembro' }
-    ];
-
-    const sanitizarTextoAIMA = (txt) => {
-      if (!txt) return '';
-      return String(txt)
-        .toUpperCase()
-        .replace(/[^A-ZÇÃÁÀÉÊÍÕÔÓÚ'\-\s]/g, '')
-        .trimStart();
+    const UH_CONFIG = {
+      nif: "500541523",
+      estabelecimento: "0001",
+      nome: "CASA VELHA",
+      morada: "RUA OCIDENTAL N 1464",
+      localidade: "PERAFITA",
+      codPostal: "4455",
+      zonaPostal: "511",
+      telefone: "967027875",
+      fax: "967027875",
+      contactoNome: "JOSE NUNES",
+      contactoEmail: "casavelha.alojamentolocal@gmail.com"
     };
 
-    function CheckInAIMA() {
-      const [loading, setLoading] = useState(false);
-      
-      const [searchQuery, setSearchQuery] = useState('');
-      const [searchResults, setSearchResults] = useState([]);
-      const [searching, setSearching] = useState(false);
+    const formatarMoeda = (val) => {
+      if (val === undefined || val === null || val === '') return '0.00 €';
+      let str = String(val).replace('€', '').replace(/\s+/g, '').trim();
+      str = str.replace(',', '.');
+      const num = parseFloat(str);
+      return isNaN(num) ? '0.00 €' : `${num.toFixed(2)} €`;
+    };
 
-      const [idadeCalculada, setIdadeCalculada] = useState(null);
-      const [taxaSugerida, setTaxaSugerida] = useState('0.00');
-      const [ultimoSucesso, setUltimoSucesso] = useState(null);
-      
-      const [showSobreModal, setShowSobreModal] = useState(false);
-      const [showBoletimForm, setShowBoletimForm] = useState(true);
+    const extrairValorNumerico = (val) => {
+      if (val === undefined || val === null || val === '') return 0;
+      let str = String(val).replace('€', '').replace(/\s+/g, '').trim();
+      str = str.replace(',', '.');
+      const num = parseFloat(str);
+      return isNaN(num) ? 0 : num;
+    };
 
-      const [alertaRecorrente, setAlertaRecorrente] = useState(null);
-      const [verificandoDoc, setVerificandoDoc] = useState(false);
+    const formatarDataIso = (dStr) => {
+      if (!dStr) return '-';
+      const str = String(dStr).trim();
+      if (str.length >= 10 && str.match(/^\d{4}-\d{2}-\d{2}/)) {
+        return str.slice(0, 10);
+      }
+      const d = new Date(str);
+      if (!isNaN(d.getTime())) {
+        const ano = d.getFullYear();
+        const mes = String(d.getMonth() + 1).padStart(2, '0');
+        const dia = String(d.getDate()).padStart(2, '0');
+        return `${ano}-${mes}-${dia}`;
+      }
+      return str.slice(0, 10);
+    };
 
-      const [funcionarios, setFuncionarios] = useState([]);
-      const [selectedFuncObj, setSelectedFuncObj] = useState({ id: '', nome: '' });
-
-      const [nasceAno, setNasceAno] = useState('');
-      const [nasceMes, setNasceMes] = useState('01');
-      const [nasceDia, setNasceDia] = useState('01');
+    function AdminPMS() {
+      const [autenticado, setAutenticado] = useState(false);
+      const [pinInput, setPinInput] = useState('');
+      const [erroPin, setErroPin] = useState('');
 
       const todayStr = new Date().toISOString().slice(0, 10);
+      const anoAtual = new Date().getFullYear();
+      const inicioAnoStr = `${anoAtual}-01-01`;
 
-      const [novoBoletim, setNovoBoletim] = useState({
-        apelido: '',
-        nome: '',
-        dataNascimento: '',
-        nacionalidade: 'PRT',
-        localNascimento: '',
-        docTipo: 'B',
-        docNumero: '',
-        docPais: 'PRT',
-        paisResidencia: 'PRT',
-        localResidencia: '',
-        dataEntrada: todayStr,
-        dataSaida: '',
-        tipoAlojamento: 'Quarto Duplo com Vista Mar',
-        numeroUnidade: '1',
-        eMenor: 'Não',
-        titularDoc: 'Próprio',
-        qualidadeAcompanhante: 'N/A',
-        valorReserva: '',
-        taxaTuristica: '0.00',
-        modoPagamento: 'Numerário',
-        numeroReserva: '',
-        plataformaReserva: 'sem reserva'
+      const [exportDataInicio, setExportDataInicio] = useState(todayStr);
+      const [exportDataFim, setExportDataFim] = useState(todayStr);
+      const [numFicheiroSerie, setNumFicheiroSerie] = useState('00001');
+      const [estrangeirosAIMA, setEstrangeirosAIMA] = useState([]);
+      const [carregandoEstrangeiros, setCarregandoEstrangeiros] = useState(false);
+      const [exporting, setExporting] = useState(false);
+
+      const [registosAlojamento, setRegistosAlojamento] = useState([]);
+      const [loadingData, setLoadingData] = useState(false);
+      const [filtroTexto, setFiltroTexto] = useState('');
+      const [filtroDataInicio, setFiltroDataInicio] = useState('');
+      const [filtroDataFim, setFiltroDataFim] = useState('');
+      const [filtroPais, setFiltroPais] = useState('');
+
+      const [graficoDataInicio, setGraficoDataInicio] = useState(inicioAnoStr);
+      const [graficoDataFim, setGraficoDataFim] = useState(todayStr);
+
+      // Estados de Visibilidade dos Grupos
+      const [showInHouseGroup, setShowInHouseGroup] = useState(true);
+      const [showAimaGroup, setShowAimaGroup] = useState(true);
+      const [showChartsGroup, setShowChartsGroup] = useState(true);
+      const [showHistoryGroup, setShowHistoryGroup] = useState(true);
+
+      const chartMensalRef = useRef(null);
+      const chartPaisRef = useRef(null);
+      const chartPlataformaRef = useRef(null);
+      const chartMensalInstance = useRef(null);
+      const chartPaisInstance = useRef(null);
+      const chartPlataformaInstance = useRef(null);
+
+      const handleLogin = (e) => {
+        e.preventDefault();
+        if (pinInput === '1234' || pinInput === 'casa-velha-admin') {
+          setAutenticado(true);
+          setErroPin('');
+          carregarTodosRegistos();
+        } else {
+          setErroPin('Acesso negado. Palavra-passe incorreta.');
+        }
+      };
+
+      const carregarTodosRegistos = async () => {
+        setLoadingData(true);
+        try {
+          const response = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action: "SEARCH_GUEST", query: "" })
+          });
+          const result = await response.json();
+          if (result.status === "success") {
+            setRegistosAlojamento(result.data || []);
+          }
+        } catch (err) {
+        } finally {
+          setLoadingData(false);
+        }
+      };
+
+      // Cálculo dos Hóspedes In-House na Data Atual
+      const hoje = new Date(todayStr);
+      const inHouseList = registosAlojamento.filter(r => {
+        const dtInStr = formatarDataIso(r.Check_In || r.Data_Entrada || r[12]);
+        const dtOutStr = formatarDataIso(r.Check_Out || r.Data_Saida || r[13]);
+        if (!dtInStr || !dtOutStr || dtInStr === '-' || dtOutStr === '-') return false;
+
+        const dtIn = new Date(dtInStr);
+        const dtOut = new Date(dtOutStr);
+        return hoje >= dtIn && hoje < dtOut;
       });
 
-      const [numeroNoites, setNumeroNoites] = useState(0);
-
-      const calcularDiferencaNoites = (d1Str, d2Str) => {
-        if (!d1Str || !d2Str) return 0;
-        const dIn = new Date(d1Str);
-        const dOut = new Date(d2Str);
-        const diffTime = dOut - dIn;
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        return diffDays > 0 ? diffDays : 0;
-      };
-
       useEffect(() => {
-        setNumeroNoites(calcularDiferencaNoites(novoBoletim.dataEntrada, novoBoletim.dataSaida));
-      }, [novoBoletim.dataEntrada, novoBoletim.dataSaida]);
+        if (!autenticado || registosAlojamento.length === 0 || !showChartsGroup) return;
 
-      const formatarDataLimpa = (dStr) => {
-        if (!dStr) return '';
-        const str = String(dStr).trim();
-        if (str.length >= 10 && str.match(/^\d{4}-\d{2}-\d{2}/)) {
-          return str.slice(0, 10);
-        }
-        const d = new Date(str);
-        if (!isNaN(d.getTime())) {
-          return d.toISOString().slice(0, 10);
-        }
-        return str.slice(0, 10);
-      };
+        const start = new Date(graficoDataInicio);
+        const end = new Date(graficoDataFim);
+        end.setHours(23, 59, 59);
 
-      const formatarMoedaAvançada = (val) => {
-        if (val === undefined || val === null || val === '') return '0.00';
-        let str = String(val).replace('€', '').replace(/\s+/g, '').trim();
-        str = str.replace(',', '.');
-        const num = parseFloat(str);
-        return isNaN(num) ? '0.00' : num.toFixed(2);
-      };
-
-      // Cálculo em tempo real do Total Geral Informativo (Reserva + Taxa)
-      const valorReservaNum = parseFloat(novoBoletim.valorReserva || 0) || 0;
-      const taxaTuristicaNum = parseFloat(novoBoletim.taxaTuristica || 0) || 0;
-      const totalPagarInformativo = (valorReservaNum + taxaTuristicaNum).toFixed(2);
-
-      const handleNumeroReservaChange = (val) => {
-        const numLimpo = val;
-        setNovoBoletim(prev => {
-          if (!numLimpo.trim()) {
-            return { ...prev, numeroReserva: numLimpo, plataformaReserva: 'sem reserva' };
-          } else {
-            const platAtual = prev.plataformaReserva === 'sem reserva' ? 'Booking' : prev.plataformaReserva;
-            return { ...prev, numeroReserva: numLimpo, plataformaReserva: platAtual };
-          }
+        const registosFiltradosGraficos = registosAlojamento.filter(r => {
+          const checkInStr = r.Check_In || r.Data_Entrada || r[12];
+          if (!checkInStr) return false;
+          const dtIn = new Date(checkInStr);
+          return dtIn >= start && dtIn <= end;
         });
-      };
 
-      const processarLinhaPorIndice = (r) => {
-        let arr = [];
-        let rIndex = 0;
+        const totaisMensais = {};
+        const totaisPorPais = {};
+        const totaisPorPlataforma = {};
 
-        if (Array.isArray(r)) {
-          arr = r;
-          rIndex = r.rowIndex || 0;
-        } else if (typeof r === 'object' && r !== null) {
-          rIndex = r.rowIndex || 0;
-          arr = [
-            r.ID_Boletim || r[0] || '',
-            r.Data_Registo || r[1] || '',
-            r.Apelido || r[2] || '',
-            r.Nome || r[3] || '',
-            r.Data_Nascimento || r[4] || '',
-            r.Nacionalidade || r[5] || '',
-            r.Local_Nascimento || r[6] || '',
-            r.Tipo_Documento || r[7] || '',
-            r.Numero_Documento || r[8] || '',
-            r.Pais_Emissor || r[9] || '',
-            r.Pais_Residencia || r[10] || '',
-            r.Local_Residencia || r[11] || '',
-            r.Check_In || r[12] || '',
-            r.Check_Out || r[13] || '',
-            r.Tipo_Alojamento || r[14] || '',
-            r.Numero_Unidade || r[15] || '',
-            r.E_Menor || r[16] || '',
-            r.Titular_Documento || r[17] || '',
-            r.Qualidade_Acompanhante || r[18] || '',
-            r.Valor_Reserva || r[19] || '',
-            r.Taxa_Turistica || r[20] || '',
-            r.Modo_Pagamento || r[21] || '',
-            r.Funcionario_Rececao || r[22] || '',
-            r.Numero_Reserva || r[23] || '',
-            r.Plataforma_Reserva || r[24] || 'sem reserva'
-          ];
-        }
+        registosFiltradosGraficos.forEach(r => {
+          const dtStr = formatarDataIso(r.Check_In || r.Data_Entrada || r[12]);
+          const mesChave = dtStr.substring(0, 7);
+          const pais = String(r.Nacionalidade || r.nacionalidade || r[5] || 'PRT').toUpperCase().trim();
+          const plataforma = String(r.Plataforma_Reserva || r.plataformaReserva || r[24] || 'sem reserva').trim();
+          const valor = extrairValorNumerico(r.Valor_Reserva || r.valorReserva || r[19]);
 
-        const idBoletim = String(arr[0] || 'CV-HIST').trim();
-        const apelido = String(arr[2] || '').trim();
-        const nome = String(arr[3] || '').trim();
-        const nomeFormatadoComprovativo = nome ? `${apelido}, ${nome}` : apelido;
-        const dataNascimento = formatarDataLimpa(arr[4]);
-        const nacionalidade = String(arr[5] || 'PRT').trim();
-        const localNascimento = String(arr[6] || '').trim();
-        const docTipo = String(arr[7] || 'B').trim();
-        const docNumero = String(arr[8] || '').trim();
-        const docPais = String(arr[9] || 'PRT').trim();
-        const paisResidencia = String(arr[10] || 'PRT').trim();
-        const localResidencia = String(arr[11] || '').trim();
-        const dataEntrada = formatarDataLimpa(arr[12]);
-        const dataSaida = formatarDataLimpa(arr[13]);
-        const tipoAlojamento = String(arr[14] || 'Quarto Duplo com Vista Mar').trim();
-        const numeroUnidade = String(arr[15] || '1').trim();
-        const eMenor = String(arr[16] || 'Não').trim();
-        const titularDoc = String(arr[17] || 'Próprio').trim();
-        const qualidadeAcompanhante = String(arr[18] || 'N/A').trim();
-        const valorReserva = formatarMoedaAvançada(arr[19]);
-        const taxaTuristica = formatarMoedaAvançada(arr[20]);
-        const modoPagamento = String(arr[21] || 'Numerário').trim();
-        const funcRececao = String(arr[22] || selectedFuncObj.nome).trim();
-        const numeroReserva = String(arr[23] || '').trim();
-        const plataformaReserva = String(arr[24] || (numeroReserva ? 'Booking' : 'sem reserva')).trim();
+          totaisMensais[mesChave] = (totaisMensais[mesChave] || 0) + valor;
+          totaisPorPais[pais] = (totaisPorPais[pais] || 0) + valor;
+          totaisPorPlataforma[plataforma] = (totaisPorPlataforma[plataforma] || 0) + valor;
+        });
 
-        let funcId = '';
-        if (funcRececao && funcRececao.includes('[') && funcRececao.includes(']')) {
-          funcId = funcRececao.split('[')[1].split(']')[0];
-        }
+        const labelsMensais = Object.keys(totaisMensais).sort();
+        const dataMensais = labelsMensais.map(k => totaisMensais[k]);
 
-        return {
-          rowIndex: rIndex,
-          idBoletim,
-          apelido,
-          nome,
-          nomeCompleto: nomeFormatadoComprovativo,
-          dataNascimento,
-          nacionalidade,
-          localNascimento,
-          paisResidencia,
-          localResidencia,
-          docTipo,
-          docNumero,
-          docPais,
-          tipoAlojamento,
-          numeroUnidade,
-          dataEntrada,
-          dataSaida,
-          noitesCalculadas: calcularDiferencaNoites(dataEntrada, dataSaida),
-          eMenor,
-          titularDoc,
-          qualidadeAcompanhante,
-          valorReserva,
-          taxaTuristica,
-          modoPagamento,
-          funcionarioNome: funcRececao,
-          funcionarioId: funcId || selectedFuncObj.id || '',
-          numeroReserva,
-          plataformaReserva
-        };
-      };
+        const labelsPais = Object.keys(totaisPorPais).sort((a,b) => totaisPorPais[b] - totaisPorPais[a]);
+        const dataPais = labelsPais.map(k => totaisPorPais[k]);
 
-      useEffect(() => {
-        fetch(GOOGLE_SCRIPT_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ action: "GET_EMPLOYEES" })
-        })
-        .then(res => res.json())
-        .then(res => {
-          if (res.status === "success" && res.data && res.data.length > 0) {
-            setFuncionarios(res.data);
-            setSelectedFuncObj(res.data[0]);
-          }
-        })
-        .catch(() => {});
-      }, []);
+        const labelsPlataforma = Object.keys(totaisPorPlataforma).sort((a,b) => totaisPorPlataforma[b] - totaisPorPlataforma[a]);
+        const dataPlataforma = labelsPlataforma.map(k => totaisPorPlataforma[k]);
 
-      useEffect(() => {
-        const docLimpo = (novoBoletim.docNumero || '').trim();
-        if (docLimpo.length < 4) {
-          setAlertaRecorrente(null);
-          return;
-        }
-
-        const timer = setTimeout(async () => {
-          setVerificandoDoc(true);
-          try {
-            const response = await fetch(GOOGLE_SCRIPT_URL, {
-              method: 'POST',
-              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-              body: JSON.stringify({ action: "SEARCH_GUEST", query: docLimpo })
-            });
-            const result = await response.json();
-
-            if (result.status === "success" && result.data && result.data.length > 0) {
-              const ultimoRaw = result.data[result.data.length - 1];
-              const norm = processarLinhaPorIndice(ultimoRaw);
-              const totalEstadias = result.data.length;
-
-              setAlertaRecorrente({
-                nome: norm.nomeCompleto,
-                estadias: totalEstadias,
-                ultimaEntrada: norm.dataEntrada
-              });
-
-              setNovoBoletim(prev => ({
-                ...prev,
-                apelido: norm.apelido || prev.apelido,
-                nome: norm.nome || prev.nome,
-                nacionalidade: norm.nacionalidade || prev.nacionalidade,
-                localNascimento: norm.localNascimento || prev.localNascimento,
-                docTipo: norm.docTipo || prev.docTipo,
-                docPais: norm.docPais || prev.docPais,
-                paisResidencia: norm.paisResidencia || prev.paisResidencia,
-                localResidencia: norm.localResidencia || prev.localResidencia
-              }));
-
-              if (norm.dataNascimento) {
-                const parts = norm.dataNascimento.split('-');
-                if (parts.length === 3) {
-                  setNasceAno(parts[0]);
-                  setNasceMes(parts[1]);
-                  setNasceDia(parts[2]);
-                  setNovoBoletim(prev => ({ ...prev, dataNascimento: norm.dataNascimento }));
-                }
+        if (chartMensalRef.current) {
+          if (chartMensalInstance.current) chartMensalInstance.current.destroy();
+          chartMensalInstance.current = new Chart(chartMensalRef.current, {
+            type: 'bar',
+            data: {
+              labels: labelsMensais.length > 0 ? labelsMensais : ['Sem dados'],
+              datasets: [{
+                label: 'Faturação Estadias (€)',
+                data: dataMensais.length > 0 ? dataMensais : [0],
+                backgroundColor: 'rgba(245, 158, 11, 0.85)',
+                borderColor: 'rgba(245, 158, 11, 1)',
+                borderWidth: 1,
+                borderRadius: 4
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { labels: { color: '#e2e8f0', font: { size: 11 } } } },
+              scales: {
+                x: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } }
               }
-            } else {
-              setAlertaRecorrente(null);
             }
-          } catch (e) {
-          } finally {
-            setVerificandoDoc(false);
-          }
-        }, 600);
-
-        return () => clearTimeout(timer);
-      }, [novoBoletim.docNumero]);
-
-      const handleSelectNascimento = (ano, mes, dia) => {
-        setNasceAno(ano);
-        setNasceMes(mes);
-        setNasceDia(dia);
-
-        if (ano && mes && dia) {
-          const formattedDate = `${ano}-${mes}-${String(dia).padStart(2, '0')}`;
-          setNovoBoletim(prev => ({ ...prev, dataNascimento: formattedDate }));
-        }
-      };
-
-      useEffect(() => {
-        if (!novoBoletim.dataNascimento) {
-          setIdadeCalculada(null);
-          setTaxaSugerida('0.00');
-          setNovoBoletim(prev => ({ ...prev, eMenor: 'Não', titularDoc: 'Próprio', qualidadeAcompanhante: 'N/A' }));
-          return;
-        }
-
-        const nascimento = new Date(novoBoletim.dataNascimento);
-        const hoje = new Date(novoBoletim.dataEntrada || todayStr);
-        
-        let idade = hoje.getFullYear() - nascimento.getFullYear();
-        const m = hoje.getMonth() - nascimento.getMonth();
-        if (m < 0 || (m === 0 && hoje.getDate() < nascimento.getDate())) {
-          idade--;
-        }
-
-        if (!isNaN(idade)) {
-          setIdadeCalculada(idade);
-          // Isenção < 16 anos; 2.00 €/noite até ao máximo de 7 noites
-          const valorSugeridoCalculado = idade < 16 ? '0.00' : (Math.min(numeroNoites, 7) * 2).toFixed(2);
-          setTaxaSugerida(valorSugeridoCalculado);
-
-          setNovoBoletim(prev => ({ 
-            ...prev, 
-            taxaTuristica: valorSugeridoCalculado,
-            eMenor: idade < 18 ? 'Sim' : 'Não',
-            titularDoc: idade < 18 ? (prev.titularDoc === 'Próprio' ? 'Documento do Acompanhante' : prev.titularDoc) : 'Próprio',
-            qualidadeAcompanhante: idade < 18 ? (prev.qualidadeAcompanhante === 'N/A' ? 'Pai, Mãe' : prev.qualidadeAcompanhante) : 'N/A'
-          }));
-        }
-      }, [novoBoletim.dataNascimento, novoBoletim.dataEntrada, numeroNoites]);
-
-      const gerarIDBoletim = () => {
-        const d = new Date();
-        const datePart = d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
-        const randomPart = Math.floor(1000 + Math.random() * 9000);
-        return `CV-${datePart}-${randomPart}`;
-      };
-
-      const handleSubmit = async (e) => {
-        e.preventDefault();
-
-        if (!novoBoletim.apelido.trim()) {
-          alert('Por favor introduza o Apelido do hóspede.');
-          return;
-        }
-
-        if (!novoBoletim.dataNascimento) {
-          alert('Por favor selecione a Data de Nascimento.');
-          return;
-        }
-
-        if (!novoBoletim.dataSaida || novoBoletim.dataSaida <= novoBoletim.dataEntrada) {
-          alert('A data de check-out prevista deve ser posterior à data de check-in.');
-          return;
-        }
-
-        setLoading(true);
-
-        const idBoletim = gerarIDBoletim();
-        const funcionarioString = selectedFuncObj.id 
-          ? `[${selectedFuncObj.id}] ${selectedFuncObj.nome}` 
-          : selectedFuncObj.nome;
-
-        const nomeFormatadoComprovativo = novoBoletim.nome.trim() 
-          ? `${novoBoletim.apelido.trim()}, ${novoBoletim.nome.trim()}` 
-          : novoBoletim.apelido.trim();
-
-        const payload = { 
-          ...novoBoletim, 
-          nomeCompleto: nomeFormatadoComprovativo,
-          idBoletim, 
-          funcionarioRececao: funcionarioString,
-          funcionarioId: selectedFuncObj.id || '',
-          funcionarioNome: selectedFuncObj.nome || funcionarioString,
-          noitesCalculadas: numeroNoites
-        };
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3500);
-
-        try {
-          await fetch(GOOGLE_SCRIPT_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-            signal: controller.signal
           });
-        } catch (error) {
-        } finally {
-          clearTimeout(timeoutId);
-          setLoading(false);
-          setUltimoSucesso(payload);
-
-          setNovoBoletim({
-            apelido: '',
-            nome: '',
-            dataNascimento: '',
-            nacionalidade: 'PRT',
-            localNascimento: '',
-            docTipo: 'B',
-            docNumero: '',
-            docPais: 'PRT',
-            paisResidencia: 'PRT',
-            localResidencia: '',
-            dataEntrada: todayStr,
-            dataSaida: '',
-            tipoAlojamento: novoBoletim.tipoAlojamento,
-            numeroUnidade: novoBoletim.numeroUnidade,
-            eMenor: 'Não',
-            titularDoc: 'Próprio',
-            qualidadeAcompanhante: 'N/A',
-            valorReserva: '',
-            taxaTuristica: '0.00',
-            modoPagamento: 'Numerário',
-            numeroReserva: '',
-            plataformaReserva: 'sem reserva'
-          });
-          setNasceAno('');
-          setIdadeCalculada(null);
-          setTaxaSugerida('0.00');
-          setAlertaRecorrente(null);
         }
-      };
 
-      const handleSearch = async (e) => {
+        if (chartPaisRef.current) {
+          if (chartPaisInstance.current) chartPaisInstance.current.destroy();
+          chartPaisInstance.current = new Chart(chartPaisRef.current, {
+            type: 'doughnut',
+            data: {
+              labels: labelsPais.length > 0 ? labelsPais : ['Sem dados'],
+              datasets: [{
+                data: dataPais.length > 0 ? dataPais : [1],
+                backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#f97316', '#6366f1']
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { position: 'bottom', labels: { color: '#e2e8f0', font: { size: 10 } } } }
+            }
+          });
+        }
+
+        if (chartPlataformaRef.current) {
+          if (chartPlataformaInstance.current) chartPlataformaInstance.current.destroy();
+          chartPlataformaInstance.current = new Chart(chartPlataformaRef.current, {
+            type: 'pie',
+            data: {
+              labels: labelsPlataforma.length > 0 ? labelsPlataforma : ['Sem dados'],
+              datasets: [{
+                data: dataPlataforma.length > 0 ? dataPlataforma : [1],
+                backgroundColor: ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#f43f5e', '#64748b']
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { position: 'bottom', labels: { color: '#e2e8f0', font: { size: 10 } } } }
+            }
+          });
+        }
+
+      }, [autenticado, registosAlojamento, graficoDataInicio, graficoDataFim, showChartsGroup]);
+
+      const handleProcurarEstrangeirosAIMA = async (e) => {
         e.preventDefault();
-        if (!searchQuery.trim()) return;
+        if (!exportDataInicio || !exportDataFim) {
+          alert("Por favor selecione a data de início e de fim.");
+          return;
+        }
 
-        setSearching(true);
+        setCarregandoEstrangeiros(true);
+        setEstrangeirosAIMA([]);
 
         try {
           const response = await fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({ action: "SEARCH_GUEST", query: searchQuery })
+            body: JSON.stringify({ action: "SEARCH_GUEST", query: "" })
           });
+
           const result = await response.json();
 
           if (result.status === "success") {
-            const listMapeada = (result.data || []).map(r => processarLinhaPorIndice(r));
-            setSearchResults(listMapeada);
+            const todos = result.data || [];
+            
+            const start = new Date(exportDataInicio);
+            const end = new Date(exportDataFim);
+            end.setHours(23, 59, 59);
 
-            if (listMapeada.length === 0) {
-              alert('Nenhum registo encontrado com o termo pesquisado.');
+            const filtrados = todos.filter(h => {
+              const checkInStr = h.Check_In || h.Data_Entrada || h[12];
+              const nac = String(h.Nacionalidade || h.nacionalidade || h[5] || '').toUpperCase().trim();
+              const eEstrangeiro = nac !== 'PRT' && nac !== 'PORTUGAL' && nac !== '';
+
+              if (checkInStr && eEstrangeiro) {
+                const dtIn = new Date(checkInStr);
+                return dtIn >= start && dtIn <= end;
+              }
+              return false;
+            }).map((h, index) => ({
+              ...h,
+              _tempId: index,
+              _selecionado: true
+            }));
+
+            setEstrangeirosAIMA(filtrados);
+
+            if (filtrados.length === 0) {
+              alert(`Nenhum registo de estrangeiro encontrado com check-in entre ${exportDataInicio} e ${exportDataFim}.`);
             }
           }
         } catch (error) {
-          alert('Erro ao realizar a pesquisa.');
+          alert("Erro ao procurar registos de estrangeiros.");
         } finally {
-          setSearching(false);
+          setCarregandoEstrangeiros(false);
         }
       };
 
-      const handlePreencherNovoCheckIn = (hospede) => {
-        setNovoBoletim(prev => ({
-          ...prev,
-          apelido: hospede.apelido || prev.apelido,
-          nome: hospede.nome || prev.nome,
-          nacionalidade: hospede.nacionalidade || prev.nacionalidade,
-          localNascimento: hospede.localNascimento || prev.localNascimento,
-          docTipo: hospede.docTipo || prev.docTipo,
-          docNumero: hospede.docNumero || prev.docNumero,
-          docPais: hospede.docPais || prev.docPais,
-          paisResidencia: hospede.paisResidencia || prev.paisResidencia,
-          localResidencia: hospede.localResidencia || prev.localResidencia,
-          tipoAlojamento: hospede.tipoAlojamento || prev.tipoAlojamento,
-          numeroUnidade: hospede.numeroUnidade || prev.numeroUnidade,
-          dataEntrada: todayStr,
-          dataSaida: '',
-          valorReserva: '',
-          taxaTuristica: '0.00',
-          numeroReserva: '',
-          plataformaReserva: 'sem reserva'
-        }));
+      const toggleSelecaoRegisto = (tempId) => {
+        setEstrangeirosAIMA(prev => prev.map(item => 
+          item._tempId === tempId ? { ...item, _selecionado: !item._selecionado } : item
+        ));
+      };
 
-        if (hospede.dataNascimento) {
-          const parts = hospede.dataNascimento.split('-');
-          if (parts.length === 3) {
-            setNasceAno(parts[0]);
-            setNasceMes(parts[1]);
-            setNasceDia(parts[2]);
-            setNovoBoletim(prev => ({ ...prev, dataNascimento: hospede.dataNascimento }));
-          }
+      const toggleSelecionarTodos = () => {
+        const todosSelecionados = estrangeirosAIMA.every(i => i._selecionado);
+        setEstrangeirosAIMA(prev => prev.map(item => ({ ...item, _selecionado: !todosSelecionados })));
+      };
+
+      const formatarDataAIMA = (dStr) => {
+        if (!dStr) return '';
+        const str = String(dStr).trim();
+        if (str.length >= 10 && str.match(/^\d{4}-\d{2}-\d{2}/)) {
+          return str.slice(0, 10).replace(/-/g, '');
+        }
+        const d = new Date(str);
+        if (!isNaN(d.getTime())) {
+          const ano = d.getFullYear();
+          const mes = String(d.getMonth() + 1).padStart(2, '0');
+          const dia = String(d.getDate()).padStart(2, '0');
+          return `${ano}${mes}${dia}`;
+        }
+        return str.replace(/[^0-9]/g, '').slice(0, 8);
+      };
+
+      const sanitizarAlfaNome = (txt) => {
+        if (!txt) return '';
+        return String(txt).toUpperCase().replace(/[^A-ZÇÃÁÀÉÊÍÕÔÓÚ'\-\s]/g, '').trimStart().slice(0, 40);
+      };
+
+      const sanitizarAlfaLimitado = (txt, max) => {
+        if (!txt) return '';
+        return String(txt).toUpperCase().replace(/[^A-Z0-9\s\-\'"\.,]/g, '').trim().slice(0, max);
+      };
+
+      const sanitizarAlfaNum = (txt, max) => {
+        if (!txt) return '';
+        return String(txt).toUpperCase().replace(/[^A-Z0-9]/g, '').trim().slice(0, max);
+      };
+
+      const handleExportDAT = () => {
+        const selecionados = estrangeirosAIMA.filter(i => i._selecionado);
+
+        if (selecionados.length === 0) {
+          alert("Por favor selecione pelo menos um registo na tabela antes de descarregar o ficheiro.");
+          return;
         }
 
-        setShowBoletimForm(true);
-        window.scrollTo({ top: 350, behavior: 'smooth' });
+        setExporting(true);
+
+        try {
+          let datLines = [];
+
+          const rec0 = [
+            "0",
+            "BA03",
+            sanitizarAlfaNum(UH_CONFIG.nif, 9).padStart(9, '0'),
+            sanitizarAlfaNum(UH_CONFIG.estabelecimento, 4).padStart(4, '0'),
+            sanitizarAlfaLimitado(UH_CONFIG.nome, 40),
+            sanitizarAlfaLimitado(UH_CONFIG.morada, 40),
+            sanitizarAlfaLimitado(UH_CONFIG.localidade, 30),
+            sanitizarAlfaNum(UH_CONFIG.codPostal, 4).padStart(4, '0'),
+            sanitizarAlfaNum(UH_CONFIG.zonaPostal, 3).padStart(3, '0'),
+            sanitizarAlfaNum(UH_CONFIG.telefone, 10).padStart(10, '0'),
+            sanitizarAlfaNum(UH_CONFIG.fax, 10).padStart(10, '0'),
+            sanitizarAlfaLimitado(UH_CONFIG.contactoNome, 40),
+            String(UH_CONFIG.contactoEmail).trim().slice(0, 140)
+          ].join("|") + "|";
+
+          datLines.push(rec0);
+
+          selecionados.forEach(h => {
+            const apelido = sanitizarAlfaNome(h.Apelido || h.apelido || h[2] || '');
+            const nome = sanitizarAlfaNome(h.Nome || h.nome || h[3] || '');
+            const nac = sanitizarAlfaNum(h.Nacionalidade || h.nacionalidade || h[5] || 'PRT', 3);
+            const locNasc = sanitizarAlfaLimitado(h.Local_Nascimento || h.localNascimento || h[6] || '', 40);
+            const dataNasc = formatarDataAIMA(h.Data_Nascimento || h.dataNascimento || h[4] || '');
+            const numDoc = sanitizarAlfaNum(h.Numero_Documento || h.docNumero || h[8] || '', 16);
+            const tipoDoc = sanitizarAlfaNum(h.Tipo_Documento || h.docTipo || h[7] || 'B', 3);
+            const paisEmissor = sanitizarAlfaNum(h.Pais_Emissor || h.docPais || h[9] || 'PRT', 3);
+            const paisRes = sanitizarAlfaNum(h.Pais_Residencia || h.paisResidencia || h[10] || 'PRT', 3);
+            const locRes = sanitizarAlfaLimitado(h.Local_Residencia || h.localResidencia || h[11] || '', 30);
+            const dtEntrada = formatarDataAIMA(h.Check_In || h.dataEntrada || h[12] || '');
+            const dtSaida = formatarDataAIMA(h.Check_Out || h.dataSaida || h[13] || '');
+
+            const rec1 = [
+              "1",
+              apelido,
+              nome,
+              nac,
+              locNasc,
+              dataNasc,
+              numDoc,
+              tipoDoc,
+              paisEmissor,
+              paisRes,
+              locRes,
+              dtEntrada,
+              dtSaida
+            ].join("|") + "|";
+
+            datLines.push(rec1);
+          });
+
+          const totalRegistos = datLines.length + 1;
+          const dataHojeFormatada = formatarDataAIMA(new Date());
+          const numSerieFormatted = String(numFicheiroSerie).padStart(5, '0');
+
+          const rec9 = [
+            "9",
+            String(totalRegistos).padStart(5, '0'),
+            dataHojeFormatada,
+            numSerieFormatted
+          ].join("|") + "|";
+
+          datLines.push(rec9);
+
+          const nomeFicheiroDAT = `${UH_CONFIG.nif}${UH_CONFIG.estabelecimento}${numSerieFormatted}.DAT`;
+          const datContent = datLines.join("\r\n");
+
+          const blob = new Blob([datContent], { type: "text/plain;charset=utf-8" });
+          const link = document.createElement("a");
+          link.href = URL.createObjectURL(blob);
+          link.download = nomeFicheiroDAT;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+
+          alert(`✅ Ficheiro oficial AIMA ${nomeFicheiroDAT} gerado com sucesso!\n\nForam incluídos ${selecionados.length} boletim(ns) de hóspedes selecionados.`);
+        } catch (error) {
+          alert('❌ Erro ao gerar ficheiro .DAT');
+        } finally {
+          setExporting(false);
+        }
       };
 
-      const handlePrintFromSearch = (itemMapeado) => {
-        setUltimoSucesso(itemMapeado);
-      };
+      if (!autenticado) {
+        return (
+          <div className="min-h-screen flex items-center justify-center p-4">
+            <div className="bg-slate-800 p-8 rounded-2xl border border-slate-700 shadow-2xl max-w-sm w-full space-y-5">
+              <div className="text-center space-y-1">
+                <div className="text-3xl mb-2">🔐</div>
+                <h1 className="text-xl font-bold text-white">Casa Velha PMS</h1>
+                <p className="text-xs text-slate-400">Área Privada de Gestão & Comunicação AIMA</p>
+              </div>
 
-      const handlePrintBoletim = () => {
-        if (!ultimoSucesso) return;
-        const tituloOriginal = document.title;
-        const nomeLimpo = (ultimoSucesso.nomeCompleto || 'Hospede').trim().replace(/[^a-zA-Z0-9]/g, '_');
-        const nomeFicheiroPDF = `Boletim_${ultimoSucesso.idBoletim}_${nomeLimpo}`;
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Palavra-passe de Administrador</label>
+                  <input 
+                    type="password" 
+                    placeholder="Introduza o PIN" 
+                    value={pinInput} 
+                    onChange={e => setPinInput(e.target.value)} 
+                    className="w-full bg-slate-900 border border-slate-600 p-3 rounded-lg text-white font-mono text-center outline-none focus:border-amber-500"
+                    required
+                  />
+                </div>
 
-        document.title = nomeFicheiroPDF;
-        window.print();
+                {erroPin && (
+                  <p className="text-xs text-rose-400 font-bold text-center">{erroPin}</p>
+                )}
 
-        setTimeout(() => {
-          document.title = tituloOriginal;
-        }, 1000);
-      };
+                <button 
+                  type="submit" 
+                  className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 rounded-lg transition text-xs shadow-lg"
+                >
+                  Entrar no Painel Privado
+                </button>
+              </form>
+            </div>
+          </div>
+        );
+      }
+
+      const paisesUnicos = Array.from(new Set(registosAlojamento.map(r => 
+        String(r.Nacionalidade || r[5] || '').toUpperCase().trim()
+      ))).filter(Boolean).sort();
+
+      const registosFiltrados = registosAlojamento.filter(r => {
+        if (filtroTexto.trim()) {
+          const q = filtroTexto.toLowerCase();
+          const bateTexto = (
+            String(r.Apelido || r[2] || '').toLowerCase().includes(q) ||
+            String(r.Nome || r[3] || '').toLowerCase().includes(q) ||
+            String(r.Numero_Documento || r[8] || '').toLowerCase().includes(q) ||
+            String(r.ID_Boletim || r[0] || '').toLowerCase().includes(q)
+          );
+          if (!bateTexto) return false;
+        }
+
+        if (filtroPais) {
+          const nac = String(r.Nacionalidade || r[5] || '').toUpperCase().trim();
+          if (nac !== filtroPais) return false;
+        }
+
+        const checkInStr = r.Check_In || r.Data_Entrada || r[12];
+        if (filtroDataInicio && checkInStr) {
+          if (new Date(checkInStr) < new Date(filtroDataInicio)) return false;
+        }
+        if (filtroDataFim && checkInStr) {
+          const dtFim = new Date(filtroDataFim);
+          dtFim.setHours(23, 59, 59);
+          if (new Date(checkInStr) > dtFim) return false;
+        }
+
+        return true;
+      });
+
+      const totalEstadiasFiltradas = registosFiltrados.reduce((acc, r) => acc + extrairValorNumerico(r.Valor_Reserva || r[19]), 0);
+      const totalTaxasFiltradas = registosFiltrados.reduce((acc, r) => acc + extrairValorNumerico(r.Taxa_Turistica || r[20]), 0);
 
       return (
         <div className="min-h-screen pb-12">
-          {/* CABEÇALHO PRINCIPAL */}
-          <header className="bg-slate-900 text-white p-4 shadow-md">
-            <div className="max-w-4xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-xl font-bold">🏠 Casa Velha</h1>
-                  <button 
-                    onClick={() => setShowSobreModal(true)}
-                    className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[11px] font-semibold px-2.5 py-1 rounded transition flex items-center gap-1"
-                  >
-                    ℹ️ Sobre
-                  </button>
-                </div>
-                <p className="text-xs text-slate-400">Terminal de Check-in (RNAL 166503/AL)</p>
-              </div>
-
-              {/* LOGIN DO FUNCIONÁRIO */}
-              <div className="bg-slate-800 p-2.5 rounded-lg border border-slate-700 flex items-center gap-2 text-xs w-full md:w-auto">
-                <span className="text-slate-400 font-semibold hidden sm:inline">👤 Receção:</span>
-                <div className="flex-1 md:flex-initial">
-                  {funcionarios.length > 0 ? (
-                    <select 
-                      value={selectedFuncObj.id || selectedFuncObj.nome}
-                      onChange={e => {
-                        const val = e.target.value;
-                        const found = funcionarios.find(f => f.id === val || f.nome === val);
-                        setSelectedFuncObj(found || { id: '', nome: val });
-                      }}
-                      className="w-full md:w-60 bg-slate-900 text-white border border-slate-600 rounded px-2 py-1.5 font-bold outline-none focus:ring-1 focus:ring-blue-500 text-xs"
-                    >
-                      {funcionarios.map(f => (
-                        <option key={f.id || f.nome} value={f.id || f.nome}>{f.nome}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input 
-                      type="text" 
-                      placeholder="Nome do Funcionário" 
-                      value={selectedFuncObj.nome}
-                      onChange={e => setSelectedFuncObj({ id: 'FUNC', nome: e.target.value })}
-                      className="w-full md:w-60 bg-slate-900 text-white border border-slate-600 rounded px-2 py-1.5 font-bold text-xs"
-                    />
-                  )}
+          {/* CABEÇALHO PRIVADO */}
+          <header className="bg-slate-950 border-b border-slate-800 p-4">
+            <div className="max-w-6xl mx-auto flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">⚙️</span>
+                <div>
+                  <h1 className="text-lg font-bold text-white">Casa Velha PMS — Painel Privado</h1>
+                  <p className="text-xs text-slate-400">Gestão do Alojamento Local & Ficheiros Oficiais AIMA</p>
                 </div>
               </div>
+              <button 
+                onClick={() => setAutenticado(false)} 
+                className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs px-3 py-1.5 rounded transition"
+              >
+                Sair
+              </button>
             </div>
           </header>
 
-          <main className="max-w-4xl mx-auto p-4 mt-4 space-y-6">
+          <main className="max-w-6xl mx-auto p-4 mt-6 space-y-8">
 
-            {/* PAINEL 1: PESQUISAR HÓSPEDE */}
-            <div className="bg-blue-50 p-5 rounded-xl border border-blue-200 shadow-sm space-y-3">
-              <h2 className="text-sm font-bold text-blue-900">🔍 Pesquisar Hóspede (2ª Via do Comprovativo ou Novo Check-in)</h2>
-              <form onSubmit={handleSearch} className="flex gap-2 text-xs">
-                <input 
-                  type="text" 
-                  placeholder="Pesquisar por N.º de Documento, Nome ou ID do Boletim..." 
-                  value={searchQuery} 
-                  onChange={e => setSearchQuery(e.target.value)} 
-                  className="flex-1 border border-blue-300 p-2.5 rounded bg-white font-medium outline-none focus:ring-2 focus:ring-blue-500" 
-                  required 
-                />
-                <button 
-                  type="submit" 
-                  disabled={searching}
-                  className="bg-blue-700 hover:bg-blue-800 text-white font-bold px-4 rounded transition text-xs disabled:bg-slate-400"
-                >
-                  {searching ? 'A Pesquisar...' : 'Procurar'}
-                </button>
-              </form>
-
-              {searchResults.length > 0 && (
-                <div className="mt-3 bg-white rounded border border-blue-200 divide-y text-xs">
-                  {searchResults.map(r => (
-                    <div key={r.rowIndex || r.idBoletim} className="p-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                      <div>
-                        <div className="font-bold text-slate-900">{r.nomeCompleto} <span className="text-blue-600 font-mono">({r.idBoletim})</span></div>
-                        <div className="text-slate-500">{r.docTipo}: {r.docNumero} | {r.tipoAlojamento} (Unidade {r.numeroUnidade}) | Reserva: <strong>{r.numeroReserva || 'sem reserva'}</strong> ({r.plataformaReserva})</div>
-                        <div className="text-slate-700 font-medium">Última Entrada: {r.dataEntrada} → Saída: <span className="text-slate-900 font-bold">{r.dataSaida}</span></div>
-                      </div>
-                      <div className="flex gap-2 self-end sm:self-auto">
-                        <button 
-                          onClick={() => handlePrintFromSearch(r)} 
-                          className="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-3 py-1.5 rounded flex items-center gap-1"
-                        >
-                          🖨️ 2ª Via
-                        </button>
-                        <button 
-                          onClick={() => handlePreencherNovoCheckIn(r)} 
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded shadow transition flex items-center gap-1"
-                        >
-                          ✨ Novo Check-in
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* PAINEL 2: FORMULÁRIO DE CHECK-IN */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            {/* GRUPO IN-HOUSE: HÓSPEDES ATUALMENTE ALOJADOS */}
+            <section className="bg-slate-800/80 border border-emerald-500/30 rounded-2xl shadow-xl overflow-hidden transition">
               <div 
-                onClick={() => setShowBoletimForm(!showBoletimForm)}
-                className="p-5 bg-slate-50 border-b border-slate-200 flex justify-between items-center cursor-pointer select-none hover:bg-slate-100 transition"
+                onClick={() => setShowInHouseGroup(!showInHouseGroup)}
+                className="p-5 bg-slate-900/60 flex justify-between items-center cursor-pointer select-none border-b border-slate-700/50 hover:bg-slate-800 transition"
               >
-                <div>
-                  <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                    📋 Novo Boletim de Alojamento
-                  </h2>
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">🟢</span>
+                  <div>
+                    <h2 className="text-base font-bold text-emerald-400">Hóspedes Atualmente Alojados (In-House)</h2>
+                    <p className="text-xs text-slate-300">Lista em tempo real dos hóspedes presentes hoje ({todayStr}): <strong className="text-white">{inHouseList.length} quarto(s)/unidade(s) ocupada(s)</strong></p>
+                  </div>
                 </div>
-                <button type="button" className="text-slate-600 hover:text-slate-900 text-lg font-bold p-1">
-                  {showBoletimForm ? '▲' : '▼'}
+                <button type="button" className="text-slate-400 hover:text-white text-base font-bold p-1">
+                  {showInHouseGroup ? '▲' : '▼'}
                 </button>
               </div>
 
-              {showBoletimForm && (
-                <div className="p-6 space-y-4">
-
-                  {/* BANNER DE BOAS-VINDAS A HÓSPEDE RECORRENTE */}
-                  {alertaRecorrente && (
-                    <div className="p-4 bg-emerald-100 border border-emerald-300 rounded-xl text-emerald-900 text-xs shadow-sm flex items-start justify-between gap-3">
-                      <div className="space-y-1">
-                        <div className="font-bold text-sm flex items-center gap-2">
-                          🌟 Hóspede Recorrente Detetado!
-                        </div>
-                        <p>
-                          Bem-vindo de novo a Casa Velha, <strong>{alertaRecorrente.nome}</strong>! Esta é a sua <strong>{alertaRecorrente.estadias + 1}ª estadia</strong> connosco (última entrada em {formatarDataLimpa(alertaRecorrente.ultimaEntrada)}).
-                        </p>
-                      </div>
-                      <button 
-                        type="button" 
-                        onClick={() => setAlertaRecorrente(null)} 
-                        className="text-emerald-700 font-bold hover:text-emerald-950 text-base"
-                      >
-                        ✕
-                      </button>
+              {showInHouseGroup && (
+                <div className="p-6">
+                  {inHouseList.length === 0 ? (
+                    <div className="text-center py-6 text-xs text-slate-400 font-medium">Nenhum hóspede atualmente alojado na data de hoje.</div>
+                  ) : (
+                    <div className="overflow-x-auto border border-slate-700 rounded-lg">
+                      <table className="w-full text-left text-xs divide-y divide-slate-700">
+                        <thead className="bg-slate-900 text-emerald-400 font-semibold uppercase">
+                          <tr>
+                            <th className="p-2.5">Unidade</th>
+                            <th className="p-2.5">Alojamento</th>
+                            <th className="p-2.5">Hóspede (Apelido, Nome)</th>
+                            <th className="p-2.5">Nacionalidade</th>
+                            <th className="p-2.5">Check-in</th>
+                            <th className="p-2.5">Check-out Previsto</th>
+                            <th className="p-2.5">Reserva / Plataforma</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-700/50 bg-slate-900/40">
+                          {inHouseList.map((r, idx) => (
+                            <tr key={idx} className="hover:bg-slate-700/30">
+                              <td className="p-2.5 font-bold text-emerald-400 font-mono">Unidade {r.Numero_Unidade || r[15] || '1'}</td>
+                              <td className="p-2.5 text-slate-200">{r.Tipo_Alojamento || r[14]}</td>
+                              <td className="p-2.5 font-bold text-white">
+                                {r.Apelido || r[2] ? `${r.Apelido || r[2]}, ${r.Nome || r[3]}` : (r.Nome || r[3])}
+                              </td>
+                              <td className="p-2.5 font-mono text-amber-300">{r.Nacionalidade || r[5]}</td>
+                              <td className="p-2.5 font-mono text-slate-300">{formatarDataIso(r.Check_In || r[12])}</td>
+                              <td className="p-2.5 font-mono text-amber-400 font-bold">{formatarDataIso(r.Check_Out || r[13])}</td>
+                              <td className="p-2.5">{r.Numero_Reserva || r[23] || 'sem reserva'} <span className="text-slate-500">({r.Plataforma_Reserva || r[24] || '-'})</span></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   )}
-
-                  <form onSubmit={handleSubmit} className="space-y-4 text-sm">
-                    
-                    {/* 1. Documento de Identificação */}
-                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
-                      <div className="flex justify-between items-center">
-                        <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">
-                          1. Documento de Identificação
-                        </h3>
-                        {verificandoDoc && (
-                          <span className="text-[11px] text-blue-600 font-semibold animate-pulse">
-                            🔍 A verificar histórico...
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">Tipo de Documento *</label>
-                          <select 
-                            value={novoBoletim.docTipo} 
-                            onChange={e => setNovoBoletim({...novoBoletim, docTipo: e.target.value})} 
-                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium text-xs"
-                          >
-                            <option value="B">B - Bilhete de Identidade / CC</option>
-                            <option value="P">P - Passaporte</option>
-                            <option value="O">O - Outro Documento</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">Número do Documento *</label>
-                          <input 
-                            type="text" 
-                            placeholder="Sem espaços" 
-                            value={novoBoletim.docNumero} 
-                            onChange={e => setNovoBoletim({...novoBoletim, docNumero: e.target.value.replace(/\s+/g, '').toUpperCase()})} 
-                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none font-mono font-bold text-slate-900 text-xs" 
-                            maxLength={16}
-                            required 
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">País Emissor (Código ICAO) *</label>
-                          <select 
-                            value={novoBoletim.docPais} 
-                            onChange={e => setNovoBoletim({...novoBoletim, docPais: e.target.value})} 
-                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium text-xs"
-                          >
-                            {PAISES_ICAO.map(p => <option key={p.code} value={p.code}>{p.nome} ({p.code})</option>)}
-                          </select>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 2. Nomes e Identificação Pessoal */}
-                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
-                      <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">2. Nomes e Identificação Pessoal</h3>
-                      
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">Apelido (Último Nome / Família) *</label>
-                          <input 
-                            type="text" 
-                            placeholder="Ex: SILVA (Obrigatório)" 
-                            value={novoBoletim.apelido} 
-                            onChange={e => setNovoBoletim({...novoBoletim, apelido: sanitizarTextoAIMA(e.target.value)})} 
-                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-900 text-xs uppercase" 
-                            maxLength={40}
-                            required 
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">Outros Nomes (Opcional se for nome único)</label>
-                          <input 
-                            type="text" 
-                            placeholder="Ex: JOÃO MANUEL" 
-                            value={novoBoletim.nome} 
-                            onChange={e => setNovoBoletim({...novoBoletim, nome: sanitizarTextoAIMA(e.target.value)})} 
-                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none font-medium text-xs uppercase" 
-                            maxLength={40}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-                        {/* SELEÇÃO DE NASCIMENTO */}
-                        <div className="bg-white p-3 rounded border border-slate-200">
-                          <div className="flex justify-between items-center mb-1">
-                            <label className="block text-xs font-semibold text-slate-700">Data Nascimento *</label>
-                            {idadeCalculada !== null && (
-                              <span className="text-[10px] font-bold bg-slate-200 px-1.5 py-0.5 rounded">
-                                {idadeCalculada} anos
-                              </span>
-                            )}
-                          </div>
-                          <div className="grid grid-cols-3 gap-1">
-                            <select 
-                              value={nasceAno} 
-                              onChange={e => handleSelectNascimento(e.target.value, nasceMes, nasceDia)}
-                              className="border p-1 rounded text-xs font-bold"
-                              required
-                            >
-                              <option value="">Ano</option>
-                              {ANOS_LISTA.map(a => <option key={a} value={a}>{a}</option>)}
-                            </select>
-                            <select 
-                              value={nasceMes} 
-                              onChange={e => handleSelectNascimento(nasceAno, e.target.value, nasceDia)}
-                              className="border p-1 rounded text-xs"
-                            >
-                              {MESES_LISTA.map(m => <option key={m.num} value={m.num}>{m.num}</option>)}
-                            </select>
-                            <select 
-                              value={nasceDia} 
-                              onChange={e => handleSelectNascimento(nasceAno, nasceMes, e.target.value)}
-                              className="border p-1 rounded text-xs"
-                            >
-                              {Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0')).map(d => (
-                                <option key={d} value={d}>{d}</option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">Nacionalidade (ICAO) *</label>
-                          <select 
-                            value={novoBoletim.nacionalidade} 
-                            onChange={e => setNovoBoletim({...novoBoletim, nacionalidade: e.target.value})} 
-                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium text-xs"
-                          >
-                            {PAISES_ICAO.map(p => <option key={p.code} value={p.code}>{p.nome} ({p.code})</option>)}
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">Local Nascimento (Opcional)</label>
-                          <input 
-                            type="text" 
-                            placeholder="Cidade" 
-                            value={novoBoletim.localNascimento} 
-                            onChange={e => setNovoBoletim({...novoBoletim, localNascimento: sanitizarTextoAIMA(e.target.value)})} 
-                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none font-medium text-xs uppercase" 
-                            maxLength={40}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">País de Residência (ICAO) *</label>
-                          <select 
-                            value={novoBoletim.paisResidencia} 
-                            onChange={e => setNovoBoletim({...novoBoletim, paisResidencia: e.target.value})} 
-                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium text-xs"
-                          >
-                            {PAISES_ICAO.map(p => <option key={p.code} value={p.code}>{p.nome} ({p.code})</option>)}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">Local Residência (Opcional)</label>
-                          <input 
-                            type="text" 
-                            placeholder="Cidade de residência habitual" 
-                            value={novoBoletim.localResidencia} 
-                            onChange={e => setNovoBoletim({...novoBoletim, localResidencia: sanitizarTextoAIMA(e.target.value)})} 
-                            className="w-full border border-slate-300 p-2.5 rounded focus:ring-2 focus:ring-blue-500 outline-none font-medium text-xs uppercase" 
-                            maxLength={30}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 3. Dados da Reserva */}
-                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
-                      <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">3. Dados da Reserva</h3>
-                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">Tipo de Alojamento *</label>
-                          <select 
-                            value={novoBoletim.tipoAlojamento} 
-                            onChange={e => setNovoBoletim({...novoBoletim, tipoAlojamento: e.target.value})} 
-                            className="w-full border border-slate-300 p-2 rounded bg-white text-xs"
-                          >
-                            {TIPOS_ALOJAMENTO.map(t => <option key={t} value={t}>{t}</option>)}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">Unidade *</label>
-                          <input 
-                            type="text" 
-                            value={novoBoletim.numeroUnidade} 
-                            onChange={e => setNovoBoletim({...novoBoletim, numeroUnidade: e.target.value})} 
-                            className="w-full border border-slate-300 p-2 rounded text-xs font-bold" 
-                            required 
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">N.º Reserva</label>
-                          <input 
-                            type="text" 
-                            placeholder="Opcional" 
-                            value={novoBoletim.numeroReserva} 
-                            onChange={e => handleNumeroReservaChange(e.target.value)} 
-                            className="w-full border border-slate-300 p-2 rounded text-xs" 
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">Plataforma *</label>
-                          <select 
-                            value={novoBoletim.plataformaReserva} 
-                            onChange={e => setNovoBoletim({...novoBoletim, plataformaReserva: e.target.value})} 
-                            disabled={!novoBoletim.numeroReserva.trim()}
-                            className="w-full border border-slate-300 p-2 rounded bg-white text-xs disabled:bg-slate-100"
-                          >
-                            {PLATAFORMAS_RESERVA.map(p => <option key={p} value={p}>{p}</option>)}
-                          </select>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* PAINEL DE MENOR DE IDADE */}
-                    {novoBoletim.eMenor === 'Sim' && (
-                      <div className="bg-purple-50 p-4 rounded-lg border border-purple-200 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <h3 className="font-bold text-purple-900 text-xs uppercase tracking-wider">
-                            👶 Hóspede Menor de Idade ({idadeCalculada} anos)
-                          </h3>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                          <div>
-                            <label className="block font-semibold text-purple-900 mb-1">Titular do Documento *</label>
-                            <select 
-                              value={novoBoletim.titularDoc} 
-                              onChange={e => setNovoBoletim({...novoBoletim, titularDoc: e.target.value})} 
-                              className="w-full border border-purple-300 p-2.5 rounded bg-white font-medium"
-                            >
-                              <option value="Documento do Acompanhante">Documento do Acompanhante / Responsável</option>
-                              <option value="Documento Próprio do Menor">Documento Próprio do Menor</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block font-semibold text-purple-900 mb-1">Qualidade do Acompanhante *</label>
-                            <select 
-                              value={novoBoletim.qualidadeAcompanhante} 
-                              onChange={e => setNovoBoletim({...novoBoletim, qualidadeAcompanhante: e.target.value})} 
-                              className="w-full border border-purple-300 p-2.5 rounded bg-white font-medium"
-                            >
-                              <option value="Pai, Mãe">Pai, Mãe</option>
-                              <option value="Tutor Legal">Tutor Legal</option>
-                              <option value="Outro Familiar">Outro Familiar</option>
-                              <option value="Acompanhante Autorizado">Acompanhante Autorizado</option>
-                            </select>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* 4. Estadia & Valores Financeiros */}
-                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
-                      <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">4. Período da Estadia, Pagamentos</h3>
-                      
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">Data de Entrada (Check-in) *</label>
-                          <input 
-                            type="date" 
-                            value={novoBoletim.dataEntrada} 
-                            onChange={e => setNovoBoletim({...novoBoletim, dataEntrada: e.target.value})} 
-                            className="w-full border border-slate-300 p-2 rounded text-xs" 
-                            required 
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">Data Prevista Saída (Check-out) *</label>
-                          <input 
-                            type="date" 
-                            value={novoBoletim.dataSaida} 
-                            onChange={e => setNovoBoletim({...novoBoletim, dataSaida: e.target.value})} 
-                            className="w-full border border-slate-300 p-2 rounded text-xs" 
-                            required 
-                          />
-                        </div>
-                        <div className="bg-white border border-slate-300 p-2 rounded text-center">
-                          <span className="text-[10px] block text-slate-500 font-semibold uppercase">Duração</span>
-                          <span className="text-xs font-bold text-blue-900">{numeroNoites} {numeroNoites === 1 ? 'Noite' : 'Noites'}</span>
-                        </div>
-                      </div>
-
-                      {/* CAMPOS DE PAGAMENTO E AVISO INFORMATIVO */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-                        <div>
-                          <label className="block text-xs font-semibold text-emerald-800 mb-1">Valor Reserva (€)</label>
-                          <input 
-                            type="number" 
-                            step="0.01" 
-                            placeholder="0.00"
-                            value={novoBoletim.valorReserva} 
-                            onChange={e => setNovoBoletim({...novoBoletim, valorReserva: e.target.value})} 
-                            className="w-full border border-emerald-300 p-2 rounded bg-emerald-50/50 font-bold text-xs" 
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-semibold text-emerald-800 mb-1">Taxa Turística (€) *</label>
-                          <input 
-                            type="number" 
-                            step="0.01" 
-                            value={novoBoletim.taxaTuristica} 
-                            onChange={e => setNovoBoletim({...novoBoletim, taxaTuristica: e.target.value})} 
-                            className="w-full border border-emerald-300 p-2 rounded bg-emerald-50/50 font-bold text-xs" 
-                          />
-                          {/* SUGESTÃO DE TAXA TURÍSTICA SEMPRE VISÍVEL */}
-                          <span className="text-[10px] font-bold text-emerald-700 block mt-1">
-                            💡 Sugestão calculada: {taxaSugerida} €
-                          </span>
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-semibold text-emerald-800 mb-1">Modo Pagamento *</label>
-                          <select 
-                            value={novoBoletim.modoPagamento} 
-                            onChange={e => setNovoBoletim({...novoBoletim, modoPagamento: e.target.value})} 
-                            className="w-full border border-emerald-300 p-2 rounded bg-emerald-50/50 font-bold text-xs"
-                          >
-                            {MODOS_PAGAMENTO.map(m => <option key={m} value={m}>{m}</option>)}
-                          </select>
-                        </div>
-                      </div>
-
-                      {/* MENSAGEM INFORMATIVA DE TOTAL A PAGAR (APENAS INFORMATIVO) */}
-                      <div className="p-3 bg-emerald-100/80 border border-emerald-300 rounded-lg flex justify-between items-center text-xs mt-2">
-                        <span className="font-semibold text-emerald-900 flex items-center gap-1">
-                          💳 Total a Cobrar ao Hóspede <span className="text-[10px] text-emerald-700 font-normal">(Estadia + Taxa):</span>
-                        </span>
-                        <span className="font-bold text-sm text-emerald-950 font-mono">
-                          {totalPagarInformativo} €
-                        </span>
-                      </div>
-                    </div>
-
-                    <button 
-                      type="submit" 
-                      disabled={loading}
-                      className="w-full bg-blue-700 text-white font-bold py-3.5 rounded-lg hover:bg-blue-800 transition shadow text-base disabled:bg-slate-400"
-                    >
-                      {loading ? 'A Guardar...' : '💾 Confirmar Check-in'}
-                    </button>
-                  </form>
                 </div>
               )}
-            </div>
+            </section>
+
+            {/* GRUPO GERADOR AIMA .DAT */}
+            <section className="bg-slate-800/80 border border-amber-500/30 rounded-2xl shadow-xl overflow-hidden transition">
+              <div 
+                onClick={() => setShowAimaGroup(!showAimaGroup)}
+                className="p-5 bg-slate-900/60 flex justify-between items-center cursor-pointer select-none border-b border-slate-700/50 hover:bg-slate-800 transition"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">📄</span>
+                  <div>
+                    <h2 className="text-base font-bold text-amber-400">Gerador do Ficheiro .DAT para a AIMA</h2>
+                    <p className="text-xs text-slate-300">Escolha as datas de check-in, pesquise os estrangeiros e selecione manualmente quem incluir no ficheiro.</p>
+                  </div>
+                </div>
+                <button type="button" className="text-slate-400 hover:text-white text-base font-bold p-1">
+                  {showAimaGroup ? '▲' : '▼'}
+                </button>
+              </div>
+
+              {showAimaGroup && (
+                <div className="p-6 space-y-5">
+                  <form onSubmit={handleProcurarEstrangeirosAIMA} className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end text-xs">
+                    <div>
+                      <label className="block font-semibold text-slate-300 mb-1">Data Início (Check-in) 📅</label>
+                      <input 
+                        type="date" 
+                        value={exportDataInicio} 
+                        onChange={e => setExportDataInicio(e.target.value)} 
+                        className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-lg text-white font-medium outline-none focus:border-amber-500 cursor-pointer" 
+                        required 
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-slate-300 mb-1">Data Fim (Check-in) 📅</label>
+                      <input 
+                        type="date" 
+                        value={exportDataFim} 
+                        onChange={e => setExportDataFim(e.target.value)} 
+                        className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-lg text-white font-medium outline-none focus:border-amber-500 cursor-pointer" 
+                        required 
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-slate-300 mb-1">N.º Série Ficheiro</label>
+                      <input 
+                        type="number" 
+                        value={numFicheiroSerie} 
+                        onChange={e => setNumFicheiroSerie(e.target.value)} 
+                        className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-lg text-white font-mono text-center outline-none focus:border-amber-500" 
+                        min="1"
+                        max="99999"
+                        required 
+                      />
+                    </div>
+                    <button 
+                      type="submit" 
+                      disabled={carregandoEstrangeiros}
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition shadow flex items-center justify-center gap-2 disabled:bg-slate-700"
+                    >
+                      {carregandoEstrangeiros ? 'A Pesquisar...' : '🔍 Procurar Hóspedes'}
+                    </button>
+                  </form>
+
+                  {estrangeirosAIMA.length > 0 && (
+                    <div className="space-y-3 pt-3 border-t border-slate-700">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                        <span className="text-xs font-bold text-slate-200">
+                          Hóspedes Estrangeiros Encontrados: <span className="text-amber-400">{estrangeirosAIMA.length}</span> | Selecionados: <span className="text-emerald-400">{estrangeirosAIMA.filter(i => i._selecionado).length}</span>
+                        </span>
+                        <button 
+                          type="button" 
+                          onClick={toggleSelecionarTodos} 
+                          className="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded text-slate-200 font-semibold"
+                        >
+                          {estrangeirosAIMA.every(i => i._selecionado) ? 'Desselecionar Todos' : 'Selecionar Todos'}
+                        </button>
+                      </div>
+
+                      <div className="overflow-x-auto border border-slate-700 rounded-lg">
+                        <table className="w-full text-left text-xs divide-y divide-slate-700">
+                          <thead className="bg-slate-900 text-slate-300 font-semibold uppercase">
+                            <tr>
+                              <th className="p-3 text-center w-12">Enviar</th>
+                              <th className="p-3">Hóspede (Apelido, Nome)</th>
+                              <th className="p-3">Nacionalidade</th>
+                              <th className="p-3">Documento</th>
+                              <th className="p-3">Check-in</th>
+                              <th className="p-3">Check-out</th>
+                              <th className="p-3">Valor Estadia</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-700/60 bg-slate-900/50">
+                            {estrangeirosAIMA.map((item) => (
+                              <tr key={item._tempId} className={`hover:bg-slate-700/40 ${item._selecionado ? 'bg-amber-950/20' : 'opacity-60'}`}>
+                                <td className="p-3 text-center">
+                                  <input 
+                                    type="checkbox" 
+                                    checked={item._selecionado} 
+                                    onChange={() => toggleSelecaoRegisto(item._tempId)} 
+                                    className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
+                                  />
+                                </td>
+                                <td className="p-3 font-bold text-white">
+                                  {item.Apelido || item.apelido || item[2] ? `${item.Apelido || item.apelido || item[2]}, ${item.Nome || item.nome || item[3]}` : (item.Nome || item[3])}
+                                </td>
+                                <td className="p-3 font-mono font-bold text-amber-300">{item.Nacionalidade || item.nacionalidade || item[5]}</td>
+                                <td className="p-3 font-mono">{item.Tipo_Documento || item.docTipo || item[7]}: {item.Numero_Documento || item.docNumero || item[8]}</td>
+                                <td className="p-3 font-mono text-slate-200">{formatarDataIso(item.Check_In || item.Data_Entrada || item[12])}</td>
+                                <td className="p-3 font-mono text-amber-300">{formatarDataIso(item.Check_Out || item.Data_Saida || item[13])}</td>
+                                <td className="p-3 font-bold text-emerald-400">{formatarMoeda(item.Valor_Reserva || item.valorReserva || item[19])}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div className="pt-2 flex justify-end">
+                        <button 
+                          onClick={handleExportDAT}
+                          disabled={exporting || estrangeirosAIMA.filter(i => i._selecionado).length === 0}
+                          className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-6 py-3 rounded-lg transition shadow-lg text-xs flex items-center gap-2 disabled:bg-slate-700"
+                        >
+                          {exporting ? 'A Gerar...' : '📄 Descarregar .DAT da Seleção (AIMA)'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+
+            {/* GRUPO GRÁFICOS & ANÁLISE FINANCEIRA */}
+            <section className="bg-slate-800/80 border border-blue-500/30 rounded-2xl shadow-xl overflow-hidden transition">
+              <div 
+                onClick={() => setShowChartsGroup(!showChartsGroup)}
+                className="p-5 bg-slate-900/60 flex justify-between items-center cursor-pointer select-none border-b border-slate-700/50 hover:bg-slate-800 transition"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">📈</span>
+                  <div>
+                    <h2 className="text-base font-bold text-blue-400">Análise Financeira & Gráficos Dinâmicos</h2>
+                    <p className="text-xs text-slate-300">Evolução mensal de faturação, distribuição por país e plataforma de reserva.</p>
+                  </div>
+                </div>
+                <button type="button" className="text-slate-400 hover:text-white text-base font-bold p-1">
+                  {showChartsGroup ? '▲' : '▼'}
+                </button>
+              </div>
+
+              {showChartsGroup && (
+                <div className="p-6 space-y-6">
+                  <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-700 flex flex-col sm:flex-row items-end gap-4 text-xs">
+                    <div className="flex-1 w-full">
+                      <label className="block font-semibold text-slate-300 mb-1">Data Início Análise 📅</label>
+                      <input 
+                        type="date" 
+                        value={graficoDataInicio} 
+                        onChange={e => setGraficoDataInicio(e.target.value)} 
+                        className="w-full bg-slate-800 border border-slate-600 p-2.5 rounded-lg text-white font-medium outline-none focus:border-blue-500 cursor-pointer"
+                      />
+                    </div>
+                    <div className="flex-1 w-full">
+                      <label className="block font-semibold text-slate-300 mb-1">Data Fim Análise 📅</label>
+                      <input 
+                        type="date" 
+                        value={graficoDataFim} 
+                        onChange={e => setGraficoDataFim(e.target.value)} 
+                        className="w-full bg-slate-800 border border-slate-600 p-2.5 rounded-lg text-white font-medium outline-none focus:border-blue-500 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-700/60 space-y-3">
+                      <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider text-center">Faturação Mensal (€)</h3>
+                      <div className="h-60 relative">
+                        <canvas ref={chartMensalRef}></canvas>
+                      </div>
+                    </div>
+                    <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-700/60 space-y-3">
+                      <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider text-center">Por País de Origem (ICAO)</h3>
+                      <div className="h-60 relative">
+                        <canvas ref={chartPaisRef}></canvas>
+                      </div>
+                    </div>
+                    <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-700/60 space-y-3">
+                      <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider text-center">Por Modo de Reserva</h3>
+                      <div className="h-60 relative">
+                        <canvas ref={chartPlataformaRef}></canvas>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
+
+            {/* GRUPO HISTÓRICO GERAL COMPLETO */}
+            <section className="bg-slate-800/80 border border-slate-700 rounded-2xl shadow-xl overflow-hidden transition">
+              <div 
+                onClick={() => setShowHistoryGroup(!showHistoryGroup)}
+                className="p-5 bg-slate-900/60 flex justify-between items-center cursor-pointer select-none border-b border-slate-700/50 hover:bg-slate-800 transition"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">📊</span>
+                  <div>
+                    <h2 className="text-base font-bold text-white">Histórico Geral de Registos de Alojamento</h2>
+                    <p className="text-xs text-slate-400">Base de dados completa (Hóspedes Nacionais e Estrangeiros): {registosAlojamento.length} registo(s)</p>
+                  </div>
+                </div>
+                <button type="button" className="text-slate-400 hover:text-white text-base font-bold p-1">
+                  {showHistoryGroup ? '▲' : '▼'}
+                </button>
+              </div>
+
+              {showHistoryGroup && (
+                <div className="p-6 space-y-4">
+                  <div className="bg-slate-900/90 p-4 rounded-xl border border-slate-700/80 grid grid-cols-1 sm:grid-cols-5 gap-3 text-xs items-end">
+                    <div>
+                      <label className="block font-semibold text-slate-300 mb-1">Check-in De 📅</label>
+                      <input 
+                        type="date" 
+                        value={filtroDataInicio} 
+                        onChange={e => setFiltroDataInicio(e.target.value)} 
+                        className="w-full bg-slate-800 border border-slate-600 p-2 rounded text-white outline-none focus:border-amber-500 cursor-pointer"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-slate-300 mb-1">Check-in Até 📅</label>
+                      <input 
+                        type="date" 
+                        value={filtroDataFim} 
+                        onChange={e => setFiltroDataFim(e.target.value)} 
+                        className="w-full bg-slate-800 border border-slate-600 p-2 rounded text-white outline-none focus:border-amber-500 cursor-pointer"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-slate-300 mb-1">País de Origem 🌍</label>
+                      <select 
+                        value={filtroPais} 
+                        onChange={e => setFiltroPais(e.target.value)} 
+                        className="w-full bg-slate-800 border border-slate-600 p-2 rounded text-white outline-none focus:border-amber-500 font-mono"
+                      >
+                        <option value="">(Todos os países)</option>
+                        {paisesUnicos.map(p => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-slate-300 mb-1">Pesquisar Texto 🔍</label>
+                      <input 
+                        type="text" 
+                        placeholder="Nome, doc ou ID..." 
+                        value={filtroTexto}
+                        onChange={e => setFiltroTexto(e.target.value)}
+                        className="w-full bg-slate-800 border border-slate-600 p-2 rounded text-white outline-none focus:border-amber-500"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => { setFiltroDataInicio(''); setFiltroDataFim(''); setFiltroPais(''); setFiltroTexto(''); }}
+                        className="flex-1 bg-slate-700 hover:bg-slate-600 text-white p-2 rounded font-semibold text-xs transition"
+                      >
+                        Limpar
+                      </button>
+                      <button 
+                        onClick={carregarTodosRegistos}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded text-xs font-semibold"
+                      >
+                        🔄
+                      </button>
+                    </div>
+                  </div>
+
+                  {loadingData ? (
+                    <div className="text-center py-8 text-xs text-slate-400">A carregar a base de dados...</div>
+                  ) : registosFiltrados.length === 0 ? (
+                    <div className="text-center py-8 text-xs text-slate-500">Nenhum registo encontrado com os filtros aplicados.</div>
+                  ) : (
+                    <div className="overflow-x-auto border border-slate-700 rounded-lg">
+                      <table className="w-full text-left text-xs divide-y divide-slate-700">
+                        <thead className="bg-slate-900 text-slate-400 font-semibold uppercase">
+                          <tr>
+                            <th className="p-2.5">ID Boletim</th>
+                            <th className="p-2.5">Hóspede (Apelido, Nome)</th>
+                            <th className="p-2.5">ICAO</th>
+                            <th className="p-2.5">Documento</th>
+                            <th className="p-2.5">Check-in</th>
+                            <th className="p-2.5">Check-out</th>
+                            <th className="p-2.5">Reserva / Modo</th>
+                            <th className="p-2.5 text-right">Valor Estadia</th>
+                            <th className="p-2.5 text-right">Taxa Turística</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-700/50 bg-slate-900/50">
+                          {registosFiltrados.map((r, idx) => (
+                            <tr key={idx} className="hover:bg-slate-700/30">
+                              <td className="p-2.5 font-mono text-amber-400">{r.ID_Boletim || r[0] || '-'}</td>
+                              <td className="p-2.5 font-bold text-white">
+                                {r.Apelido || r[2] ? `${r.Apelido || r[2]}, ${r.Nome || r[3]}` : (r.Nome || r[3])}
+                              </td>
+                              <td className="p-2.5 font-mono font-bold text-amber-300">{r.Nacionalidade || r[5]}</td>
+                              <td className="p-2.5 font-mono">{r.Tipo_Documento || r[7]}: {r.Numero_Documento || r[8]}</td>
+                              <td className="p-2.5 font-mono text-slate-200">{formatarDataIso(r.Check_In || r[12])}</td>
+                              <td className="p-2.5 font-mono text-amber-300 font-semibold">{formatarDataIso(r.Check_Out || r[13])}</td>
+                              <td className="p-2.5">{r.Numero_Reserva || r[23] || 'sem reserva'} <span className="text-slate-500">({r.Plataforma_Reserva || r[24] || '-'})</span></td>
+                              <td className="p-2.5 text-right font-bold text-emerald-400">{formatarMoeda(r.Valor_Reserva || r[19])}</td>
+                              <td className="p-2.5 text-right font-bold text-emerald-300">{formatarMoeda(r.Taxa_Turistica || r[20])}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+
+                        <tfoot className="bg-slate-950 font-bold text-xs text-white divide-t-2 divide-slate-700">
+                          <tr>
+                            <td colSpan="7" className="p-3 text-right uppercase tracking-wider text-slate-400">
+                              Totais ({registosFiltrados.length} registos):
+                            </td>
+                            <td className="p-3 text-right font-mono text-emerald-400 text-sm">
+                              {formatarMoeda(totalEstadiasFiltradas)}
+                            </td>
+                            <td className="p-3 text-right font-mono text-emerald-300 text-sm">
+                              {formatarMoeda(totalTaxasFiltradas)}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
 
           </main>
-
-          {/* MODAL: SOBRE O ESTABELECIMENTO */}
-          {showSobreModal && (
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-              <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200">
-                <div className="text-center border-b pb-3">
-                  <h2 className="text-lg font-bold text-slate-900">🏠 Casa Velha</h2>
-                  <p className="text-xs text-slate-500">Informação Legal, Registo de Alojamento Local</p>
-                </div>
-                <div className="space-y-3 text-xs text-slate-700">
-                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
-                    <div className="flex justify-between"><span>Registo RNAL:</span><strong className="font-mono">166503/AL</strong></div>
-                    <div className="flex justify-between"><span>Título Autorização Utilização:</span><strong className="font-mono">N.º 63/18</strong></div>
-                  </div>
-                </div>
-                <button onClick={() => setShowSobreModal(false)} className="w-full bg-slate-800 text-white py-2.5 rounded-lg text-xs font-bold">Fechar</button>
-              </div>
-            </div>
-          )}
-
-          {/* MODAL DE SUCESSO & IMPRESSÃO */}
-          {ultimoSucesso && (
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-              <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-slate-200">
-                <div id="printable-boletim" className="space-y-4 text-xs font-sans text-slate-800 p-2">
-                  <div className="text-center border-b pb-3">
-                    <h2 className="text-base font-bold text-slate-900">🏠 Casa Velha, Comprovativo de Check-in</h2>
-                    <p className="text-[11px] text-slate-500">Boletim de Alojamento (RNAL n.º 166503/AL)</p>
-                    <span className="inline-block mt-1 font-mono font-bold bg-blue-100 text-blue-900 px-2 py-0.5 rounded text-xs">
-                      ID Boletim: {ultimoSucesso.idBoletim}
-                    </span>
-                  </div>
-
-                  <div className="space-y-2 border-b pb-3">
-                    <div><strong className="text-slate-600">Hóspede:</strong> {ultimoSucesso.nomeCompleto}</div>
-                    <div><strong className="text-slate-600">Data de Nascimento:</strong> {ultimoSucesso.dataNascimento}</div>
-                    <div><strong className="text-slate-600">Nacionalidade:</strong> {ultimoSucesso.nacionalidade} | <strong className="text-slate-600">Residência:</strong> {ultimoSucesso.paisResidencia}</div>
-                    <div><strong className="text-slate-600">Documento:</strong> Tipo {ultimoSucesso.docTipo} N.º {ultimoSucesso.docNumero} ({ultimoSucesso.docPais})</div>
-                    <div><strong className="text-slate-600">Reserva:</strong> {ultimoSucesso.numeroReserva || 'sem reserva'} ({ultimoSucesso.plataformaReserva})</div>
-                  </div>
-
-                  <div className="space-y-1 border-b pb-3">
-                    <div><strong className="text-slate-600">Alojamento:</strong> {ultimoSucesso.tipoAlojamento} (Unidade {ultimoSucesso.numeroUnidade})</div>
-                    <div><strong className="text-slate-600">Check-in:</strong> {formatarDataLimpa(ultimoSucesso.dataEntrada)} → <strong className="text-slate-600">Check-out:</strong> {formatarDataLimpa(ultimoSucesso.dataSaida)} ({ultimoSucesso.noitesCalculadas} noites)</div>
-                  </div>
-
-                  <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200 space-y-1 font-medium text-emerald-900">
-                    <div>Valor Reserva: <strong>{ultimoSucesso.valorReserva || '0.00'} €</strong> | Taxa Turística: <strong>{ultimoSucesso.taxaTuristica || '0.00'} €</strong></div>
-                    <div>Modo de Pagamento: <strong>{ultimoSucesso.modoPagamento}</strong></div>
-                  </div>
-                </div>
-
-                <div className="flex gap-3 pt-2 border-t">
-                  <button onClick={handlePrintBoletim} className="flex-1 bg-slate-800 text-white font-bold py-2.5 rounded-lg text-xs">🖨️ Imprimir Boletim</button>
-                  <button onClick={() => setUltimoSucesso(null)} className="bg-slate-200 text-slate-800 font-semibold px-4 py-2.5 rounded-lg text-xs">Fechar</button>
-                </div>
-              </div>
-            </div>
-          )}
-
         </div>
       );
     }
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<CheckInAIMA />);
+    ReactDOM.createRoot(document.getElementById('root')).render(<AdminPMS />);
   </script>
 </body>
 </html>
