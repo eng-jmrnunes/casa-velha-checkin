@@ -1,3 +1,4 @@
+<!-- index.html -->
 <!DOCTYPE html>
 <html lang="pt">
 <head>
@@ -257,7 +258,7 @@
       { num: '01', nome: 'Janeiro' }, { num: '02', nome: 'Fevereiro' }, { num: '03', nome: 'Março' },
       { num: '04', nome: 'Abril' }, { num: '05', nome: 'Maio' }, { num: '06', nome: 'Junho' },
       { num: '07', nome: 'Julho' }, { num: '08', nome: 'Agosto' }, { num: '09', nome: 'Setembro' },
-      { num: '10', num: 'Outubro' }, { num: '11', nome: 'Novembro' }, { num: '12', nome: 'Dezembro' }
+      { num: '10', nome: 'Outubro' }, { num: '11', nome: 'Novembro' }, { num: '12', nome: 'Dezembro' }
     ];
 
     const sanitizarTextoAIMA = (txt) => {
@@ -285,8 +286,13 @@
       const [alertaRecorrente, setAlertaRecorrente] = useState(null);
       const [verificandoDoc, setVerificandoDoc] = useState(false);
 
-      // Estado para Alerta de Conflito/Ocupação da Unidade
-      const [alertaOcupacao, setAlertaOcupacao] = useState(null);
+      // ESTADOS OPÇÃO A: Hóspedes In-House Hoje
+      const [inHouseList, setInHouseList] = useState([]);
+      const [showInHousePanel, setShowInHousePanel] = useState(false);
+      const [loadingInHouse, setLoadingInHouse] = useState(false);
+
+      // ESTADO OPÇÃO B: Estado Específico da Unidade Selecionada
+      const [estadoUnidade, setEstadoUnidade] = useState(null);
 
       const [funcionarios, setFuncionarios] = useState([]);
       const [selectedFuncObj, setSelectedFuncObj] = useState({ id: '', nome: '' });
@@ -362,14 +368,47 @@
       const taxaTuristicaNum = parseFloat(novoBoletim.taxaTuristica || 0) || 0;
       const totalPagarInformativo = (valorReservaNum + taxaTuristicaNum).toFixed(2);
 
-      // VERIFICAÇÃO DE OCUPAÇÃO DA UNIDADE EM TEMPO REAL
+      // CARREGAR HÓSPEDES IN-HOUSE PARA O BLOCO DO TOPO (OPÇÃO A)
+      const carregarInHouseHoje = async () => {
+        setLoadingInHouse(true);
+        try {
+          const response = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action: "SEARCH_GUEST", query: "" })
+          });
+          const result = await response.json();
+
+          if (result.status === "success" && result.data) {
+            const hoje = new Date(todayStr);
+            const ativos = result.data.filter(r => {
+              const dtInStr = formatarDataLimpa(r.Check_In || r[12]);
+              const dtOutStr = formatarDataLimpa(r.Check_Out || r[13]);
+              if (!dtInStr || !dtOutStr) return false;
+              const dtIn = new Date(dtInStr);
+              const dtOut = new Date(dtOutStr);
+              return hoje >= dtIn && hoje < dtOut;
+            }).map(r => processarLinhaPorIndice(r));
+
+            setInHouseList(ativos);
+          }
+        } catch (e) {
+        } font;
+        setLoadingInHouse(false);
+      };
+
+      useEffect(() => {
+        carregarInHouseHoje();
+      }, []);
+
+      // VERIFICAÇÃO DINÂMICA DA UNIDADE SELECIONADA (OPÇÃO B)
       useEffect(() => {
         const uTarget = (novoBoletim.numeroUnidade || '').trim();
         const dInTarget = novoBoletim.dataEntrada;
         const dOutTarget = novoBoletim.dataSaida;
 
-        if (!uTarget || !dInTarget || !dOutTarget) {
-          setAlertaOcupacao(null);
+        if (!uTarget || !dInTarget) {
+          setEstadoUnidade(null);
           return;
         }
 
@@ -382,9 +421,10 @@
             });
             const result = await response.json();
 
-            if (result.status === "success" && result.data && result.data.length > 0) {
+            if (result.status === "success" && result.data) {
               const startTarget = new Date(dInTarget);
-              const endTarget = new Date(dOutTarget);
+              const endTarget = dOutTarget ? new Date(dOutTarget) : new Date(dInTarget);
+              endTarget.setHours(23, 59, 59);
 
               const conflito = result.data.find(r => {
                 const uExist = String(r.Numero_Unidade || r[15] || '').trim();
@@ -394,30 +434,29 @@
                 if (uExist === uTarget && dInExistStr && dOutExistStr) {
                   const startExist = new Date(dInExistStr);
                   const endExist = new Date(dOutExistStr);
-
-                  // Verifica se há sobreposição de intervalo [startTarget, endTarget[ com [startExist, endExist[
                   return (startTarget < endExist && endTarget > startExist);
                 }
                 return false;
               });
 
               if (conflito) {
-                const nomeConflito = conflito.Nome || conflito[3] || conflito.Apelido || conflito[2] || 'Hóspede';
-                const dInConf = formatarDataLimpa(conflito.Check_In || conflito[12]);
-                const dOutConf = formatarDataLimpa(conflito.Check_Out || conflito[13]);
-                setAlertaOcupacao({
+                const norm = processarLinhaPorIndice(conflito);
+                setEstadoUnidade({
+                  ocupado: true,
                   unidade: uTarget,
-                  hospede: nomeConflito,
-                  entrada: dInConf,
-                  saida: dOutConf
+                  hospede: norm.nomeCompleto,
+                  saida: norm.dataSaida
                 });
               } else {
-                setAlertaOcupacao(null);
+                setEstadoUnidade({
+                  ocupado: false,
+                  unidade: uTarget
+                });
               }
             }
           } catch (e) {
           }
-        }, 500);
+        }, 400);
 
         return () => clearTimeout(timer);
       }, [novoBoletim.numeroUnidade, novoBoletim.dataEntrada, novoBoletim.dataSaida]);
@@ -680,8 +719,8 @@
           return;
         }
 
-        if (alertaOcupacao) {
-          const confirma = window.confirm(`⚠️ AVISO DE SOBREPOSIÇÃO:\nA Unidade ${alertaOcupacao.unidade} já tem uma reserva atribuída a ${alertaOcupacao.hospede} de ${alertaOcupacao.entrada} a ${alertaOcupacao.saida}.\n\nDeseja mesmo assim prosseguir com este check-in?`);
+        if (estadoUnidade && estadoUnidade.ocupado) {
+          const confirma = window.confirm(`⚠️ AVISO DE OCUPAÇÃO:\nA Unidade ${estadoUnidade.unidade} já tem uma reserva atribuída a ${estadoUnidade.hospede} (Saída prevista em ${estadoUnidade.saida}).\n\nDeseja mesmo assim prosseguir com este check-in?`);
           if (!confirma) return;
         }
 
@@ -751,7 +790,8 @@
           setIdadeCalculada(null);
           setTaxaSugerida('0.00');
           setAlertaRecorrente(null);
-          setAlertaOcupacao(null);
+          setEstadoUnidade(null);
+          carregarInHouseHoje();
         }
       };
 
@@ -936,6 +976,56 @@
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+
+            {/* OPÇÃO A: PAINEL EXPANSÍVEL DE UNIDADES OCUPADAS HOJE (IN-HOUSE) */}
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl shadow-sm overflow-hidden text-xs">
+              <div 
+                onClick={() => setShowInHousePanel(!showInHousePanel)}
+                className="p-3.5 bg-emerald-100/70 border-b border-emerald-200 flex justify-between items-center cursor-pointer select-none hover:bg-emerald-100 transition"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🟢</span>
+                  <span className="font-bold text-emerald-900">
+                    Unidades Ocupadas Hoje (In-House): <strong className="text-emerald-950 font-mono text-sm">{inHouseList.length}</strong>
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button 
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); carregarInHouseHoje(); }}
+                    className="bg-emerald-200 hover:bg-emerald-300 text-emerald-900 px-2 py-0.5 rounded font-semibold text-[11px]"
+                  >
+                    🔄 Atualizar
+                  </button>
+                  <span className="text-emerald-800 font-bold">{showInHousePanel ? '▲' : '▼'}</span>
+                </div>
+              </div>
+
+              {showInHousePanel && (
+                <div className="p-4 bg-white space-y-2">
+                  {loadingInHouse ? (
+                    <div className="text-slate-500 py-2 text-center">A verificar unidades ocupadas...</div>
+                  ) : inHouseList.length === 0 ? (
+                    <div className="text-slate-500 py-2 text-center">Todas as unidades se encontram livres hoje ({todayStr}).</div>
+                  ) : (
+                    <div className="divide-y border rounded overflow-hidden">
+                      {inHouseList.map((h, i) => (
+                        <div key={i} className="p-2.5 flex justify-between items-center hover:bg-slate-50">
+                          <div>
+                            <span className="font-bold text-emerald-800 font-mono">Unidade {h.numeroUnidade}</span> — <strong className="text-slate-900">{h.nomeCompleto}</strong>
+                            <div className="text-slate-500 text-[11px]">{h.tipoAlojamento} | Check-in: {h.dataEntrada}</div>
+                          </div>
+                          <div className="text-right">
+                            <span className="block font-semibold text-slate-700">Saída prevista:</span>
+                            <span className="font-mono font-bold text-emerald-900">{h.dataSaida}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1198,12 +1288,24 @@
                         </div>
                       </div>
 
-                      {/* BANNER DE ALERTA DE CONFLITO/OCUPAÇÃO DA UNIDADE */}
-                      {alertaOcupacao && (
-                        <div className="p-3 bg-rose-100 border border-rose-300 rounded-lg text-rose-900 text-xs shadow-sm font-semibold flex items-center gap-2">
-                          <span className="text-base">⚠️</span>
+                      {/* OPÇÃO B: INDICADOR DINÂMICO DE ESTADO DA UNIDADE */}
+                      {estadoUnidade && (
+                        <div className={`p-3 rounded-lg text-xs font-semibold flex items-center gap-2 transition ${
+                          estadoUnidade.ocupado 
+                            ? 'bg-rose-100 border border-rose-300 text-rose-900' 
+                            : 'bg-emerald-100 border border-emerald-300 text-emerald-900'
+                        }`}>
+                          <span className="text-base">{estadoUnidade.ocupado ? '🔴' : '🟢'}</span>
                           <div>
-                            <strong>Aviso de Ocupação:</strong> A Unidade {alertaOcupacao.unidade} já se encontra ocupada por <strong>{alertaOcupacao.hospede}</strong> no período de {alertaOcupacao.entrada} a {alertaOcupacao.saida}.
+                            {estadoUnidade.ocupado ? (
+                              <span>
+                                <strong>Unidade {estadoUnidade.unidade} Ocupada por:</strong> {estadoUnidade.hospede} (Check-out previsto: {estadoUnidade.saida})
+                              </span>
+                            ) : (
+                              <span>
+                                <strong>Unidade {estadoUnidade.unidade}:</strong> Disponível para as datas selecionadas.
+                              </span>
+                            )}
                           </div>
                         </div>
                       )}
