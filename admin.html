@@ -10,7 +10,6 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    /* Exibição do ícone do calendário nos inputs de data */
     input[type="date"]::-webkit-calendar-picker-indicator {
       cursor: pointer;
       filter: invert(0.8);
@@ -25,7 +24,6 @@
 
     const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzZitsCHoHUdgDwb2g8OrJEUm6tkXob-XhiywGuRt2ZAIPH9pwTWVvXGc2hQzA4psfbTg/exec";
 
-    // Dados Fixos da Unidade Hoteleira para o Registo de Cabeçalho (Tipo 0)
     const UH_CONFIG = {
       nif: "500541523",
       estabelecimento: "0001",
@@ -40,7 +38,6 @@
       contactoEmail: "casavelha.alojamentolocal@gmail.com"
     };
 
-    // Formatação de moedas
     const formatarMoeda = (val) => {
       if (val === undefined || val === null || val === '') return '0.00 €';
       let str = String(val).replace('€', '').replace(/\s+/g, '').trim();
@@ -57,7 +54,6 @@
       return isNaN(num) ? 0 : num;
     };
 
-    // Formatação de datas em AAAA-MM-DD
     const formatarDataIso = (dStr) => {
       if (!dStr) return '-';
       const str = String(dStr).trim();
@@ -83,7 +79,6 @@
       const anoAtual = new Date().getFullYear();
       const inicioAnoStr = `${anoAtual}-01-01`;
 
-      // Estados para o Gerador AIMA
       const [exportDataInicio, setExportDataInicio] = useState(todayStr);
       const [exportDataFim, setExportDataFim] = useState(todayStr);
       const [numFicheiroSerie, setNumFicheiroSerie] = useState('00001');
@@ -91,7 +86,6 @@
       const [carregandoEstrangeiros, setCarregandoEstrangeiros] = useState(false);
       const [exporting, setExporting] = useState(false);
 
-      // Estados para o Histórico Geral
       const [registosAlojamento, setRegistosAlojamento] = useState([]);
       const [loadingData, setLoadingData] = useState(false);
       const [filtroTexto, setFiltroTexto] = useState('');
@@ -99,16 +93,15 @@
       const [filtroDataFim, setFiltroDataFim] = useState('');
       const [filtroPais, setFiltroPais] = useState('');
 
-      // Estados para Filtro dos Gráficos
       const [graficoDataInicio, setGraficoDataInicio] = useState(inicioAnoStr);
       const [graficoDataFim, setGraficoDataFim] = useState(todayStr);
 
-      // Estados para Controlo de Grupos Colapsáveis
+      // Estados de Visibilidade dos Grupos
+      const [showInHouseGroup, setShowInHouseGroup] = useState(true);
       const [showAimaGroup, setShowAimaGroup] = useState(true);
       const [showChartsGroup, setShowChartsGroup] = useState(true);
       const [showHistoryGroup, setShowHistoryGroup] = useState(true);
 
-      // Refs para os canvas do Chart.js
       const chartMensalRef = useRef(null);
       const chartPaisRef = useRef(null);
       const chartPlataformaRef = useRef(null);
@@ -145,7 +138,18 @@
         }
       };
 
-      // Atualização dos Gráficos Dinâmicos
+      // Cálculo dos Hóspedes In-House na Data Atual
+      const hoje = new Date(todayStr);
+      const inHouseList = registosAlojamento.filter(r => {
+        const dtInStr = formatarDataIso(r.Check_In || r.Data_Entrada || r[12]);
+        const dtOutStr = formatarDataIso(r.Check_Out || r.Data_Saida || r[13]);
+        if (!dtInStr || !dtOutStr || dtInStr === '-' || dtOutStr === '-') return false;
+
+        const dtIn = new Date(dtInStr);
+        const dtOut = new Date(dtOutStr);
+        return hoje >= dtIn && hoje < dtOut;
+      });
+
       useEffect(() => {
         if (!autenticado || registosAlojamento.length === 0 || !showChartsGroup) return;
 
@@ -185,7 +189,6 @@
         const labelsPlataforma = Object.keys(totaisPorPlataforma).sort((a,b) => totaisPorPlataforma[b] - totaisPorPlataforma[a]);
         const dataPlataforma = labelsPlataforma.map(k => totaisPorPlataforma[k]);
 
-        // Gráfico Mensal
         if (chartMensalRef.current) {
           if (chartMensalInstance.current) chartMensalInstance.current.destroy();
           chartMensalInstance.current = new Chart(chartMensalRef.current, {
@@ -213,7 +216,6 @@
           });
         }
 
-        // Gráfico por País
         if (chartPaisRef.current) {
           if (chartPaisInstance.current) chartPaisInstance.current.destroy();
           chartPaisInstance.current = new Chart(chartPaisRef.current, {
@@ -233,7 +235,6 @@
           });
         }
 
-        // Gráfico por Modo/Plataforma de Reserva
         if (chartPlataformaRef.current) {
           if (chartPlataformaInstance.current) chartPlataformaInstance.current.destroy();
           chartPlataformaInstance.current = new Chart(chartPlataformaRef.current, {
@@ -255,7 +256,6 @@
 
       }, [autenticado, registosAlojamento, graficoDataInicio, graficoDataFim, showChartsGroup]);
 
-      // Procura e filtra hóspedes estrangeiros para o AIMA
       const handleProcurarEstrangeirosAIMA = async (e) => {
         e.preventDefault();
         if (!exportDataInicio || !exportDataFim) {
@@ -488,14 +488,11 @@
         );
       }
 
-      // Lista única de Países para o Filtro por País
       const paisesUnicos = Array.from(new Set(registosAlojamento.map(r => 
         String(r.Nacionalidade || r[5] || '').toUpperCase().trim()
       ))).filter(Boolean).sort();
 
-      // Aplicação dos Filtros do Histórico Geral
       const registosFiltrados = registosAlojamento.filter(r => {
-        // Texto livre
         if (filtroTexto.trim()) {
           const q = filtroTexto.toLowerCase();
           const bateTexto = (
@@ -507,13 +504,11 @@
           if (!bateTexto) return false;
         }
 
-        // Filtro por País
         if (filtroPais) {
           const nac = String(r.Nacionalidade || r[5] || '').toUpperCase().trim();
           if (nac !== filtroPais) return false;
         }
 
-        // Filtro por Datas de Check-in
         const checkInStr = r.Check_In || r.Data_Entrada || r[12];
         if (filtroDataInicio && checkInStr) {
           if (new Date(checkInStr) < new Date(filtroDataInicio)) return false;
@@ -527,7 +522,6 @@
         return true;
       });
 
-      // Cálculo dos Totais da Tabela de Histórico
       const totalEstadiasFiltradas = registosFiltrados.reduce((acc, r) => acc + extrairValorNumerico(r.Valor_Reserva || r[19]), 0);
       const totalTaxasFiltradas = registosFiltrados.reduce((acc, r) => acc + extrairValorNumerico(r.Taxa_Turistica || r[20]), 0);
 
@@ -554,7 +548,65 @@
 
           <main className="max-w-6xl mx-auto p-4 mt-6 space-y-8">
 
-            {/* GRUPO 1: GERADOR AIMA .DAT */}
+            {/* GRUPO IN-HOUSE: HÓSPEDES ATUALMENTE ALOJADOS */}
+            <section className="bg-slate-800/80 border border-emerald-500/30 rounded-2xl shadow-xl overflow-hidden transition">
+              <div 
+                onClick={() => setShowInHouseGroup(!showInHouseGroup)}
+                className="p-5 bg-slate-900/60 flex justify-between items-center cursor-pointer select-none border-b border-slate-700/50 hover:bg-slate-800 transition"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">🟢</span>
+                  <div>
+                    <h2 className="text-base font-bold text-emerald-400">Hóspedes Atualmente Alojados (In-House)</h2>
+                    <p className="text-xs text-slate-300">Lista em tempo real dos hóspedes presentes hoje ({todayStr}): <strong className="text-white">{inHouseList.length} quarto(s)/unidade(s) ocupada(s)</strong></p>
+                  </div>
+                </div>
+                <button type="button" className="text-slate-400 hover:text-white text-base font-bold p-1">
+                  {showInHouseGroup ? '▲' : '▼'}
+                </button>
+              </div>
+
+              {showInHouseGroup && (
+                <div className="p-6">
+                  {inHouseList.length === 0 ? (
+                    <div className="text-center py-6 text-xs text-slate-400 font-medium">Nenhum hóspede atualmente alojado na data de hoje.</div>
+                  ) : (
+                    <div className="overflow-x-auto border border-slate-700 rounded-lg">
+                      <table className="w-full text-left text-xs divide-y divide-slate-700">
+                        <thead className="bg-slate-900 text-emerald-400 font-semibold uppercase">
+                          <tr>
+                            <th className="p-2.5">Unidade</th>
+                            <th className="p-2.5">Alojamento</th>
+                            <th className="p-2.5">Hóspede (Apelido, Nome)</th>
+                            <th className="p-2.5">Nacionalidade</th>
+                            <th className="p-2.5">Check-in</th>
+                            <th className="p-2.5">Check-out Previsto</th>
+                            <th className="p-2.5">Reserva / Plataforma</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-700/50 bg-slate-900/40">
+                          {inHouseList.map((r, idx) => (
+                            <tr key={idx} className="hover:bg-slate-700/30">
+                              <td className="p-2.5 font-bold text-emerald-400 font-mono">Unidade {r.Numero_Unidade || r[15] || '1'}</td>
+                              <td className="p-2.5 text-slate-200">{r.Tipo_Alojamento || r[14]}</td>
+                              <td className="p-2.5 font-bold text-white">
+                                {r.Apelido || r[2] ? `${r.Apelido || r[2]}, ${r.Nome || r[3]}` : (r.Nome || r[3])}
+                              </td>
+                              <td className="p-2.5 font-mono text-amber-300">{r.Nacionalidade || r[5]}</td>
+                              <td className="p-2.5 font-mono text-slate-300">{formatarDataIso(r.Check_In || r[12])}</td>
+                              <td className="p-2.5 font-mono text-amber-400 font-bold">{formatarDataIso(r.Check_Out || r[13])}</td>
+                              <td className="p-2.5">{r.Numero_Reserva || r[23] || 'sem reserva'} <span className="text-slate-500">({r.Plataforma_Reserva || r[24] || '-'})</span></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+
+            {/* GRUPO GERADOR AIMA .DAT */}
             <section className="bg-slate-800/80 border border-amber-500/30 rounded-2xl shadow-xl overflow-hidden transition">
               <div 
                 onClick={() => setShowAimaGroup(!showAimaGroup)}
@@ -684,7 +736,7 @@
               )}
             </section>
 
-            {/* GRUPO 2: GRÁFICOS & ANÁLISE FINANCEIRA */}
+            {/* GRUPO GRÁFICOS & ANÁLISE FINANCEIRA */}
             <section className="bg-slate-800/80 border border-blue-500/30 rounded-2xl shadow-xl overflow-hidden transition">
               <div 
                 onClick={() => setShowChartsGroup(!showChartsGroup)}
@@ -704,7 +756,6 @@
 
               {showChartsGroup && (
                 <div className="p-6 space-y-6">
-                  {/* Filtro de Datas dos Gráficos */}
                   <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-700 flex flex-col sm:flex-row items-end gap-4 text-xs">
                     <div className="flex-1 w-full">
                       <label className="block font-semibold text-slate-300 mb-1">Data Início Análise 📅</label>
@@ -726,7 +777,6 @@
                     </div>
                   </div>
 
-                  {/* Conteúdo dos 3 Gráficos */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-700/60 space-y-3">
                       <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider text-center">Faturação Mensal (€)</h3>
@@ -751,7 +801,7 @@
               )}
             </section>
 
-            {/* GRUPO 3: HISTÓRICO GERAL COMPLETO COM FILTROS E TOTAIS */}
+            {/* GRUPO HISTÓRICO GERAL COMPLETO */}
             <section className="bg-slate-800/80 border border-slate-700 rounded-2xl shadow-xl overflow-hidden transition">
               <div 
                 onClick={() => setShowHistoryGroup(!showHistoryGroup)}
@@ -771,8 +821,6 @@
 
               {showHistoryGroup && (
                 <div className="p-6 space-y-4">
-                  
-                  {/* BARRA DE FILTROS DO HISTÓRICO */}
                   <div className="bg-slate-900/90 p-4 rounded-xl border border-slate-700/80 grid grid-cols-1 sm:grid-cols-5 gap-3 text-xs items-end">
                     <div>
                       <label className="block font-semibold text-slate-300 mb-1">Check-in De 📅</label>
@@ -867,7 +915,6 @@
                           ))}
                         </tbody>
 
-                        {/* LINHA FINAL COM OS TOTAIS */}
                         <tfoot className="bg-slate-950 font-bold text-xs text-white divide-t-2 divide-slate-700">
                           <tr>
                             <td colSpan="7" className="p-3 text-right uppercase tracking-wider text-slate-400">
